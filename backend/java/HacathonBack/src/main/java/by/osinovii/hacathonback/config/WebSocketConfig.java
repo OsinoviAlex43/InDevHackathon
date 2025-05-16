@@ -12,13 +12,27 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        config.enableSimpleBroker("/topic");//он подписывается на все с topic
-        config.setApplicationDestinationPrefixes("/admin", "/user");
+        // Префикс для топиков, на которые будут подписываться клиенты
+        config.enableSimpleBroker("/topic", "/queue");
+        
+        // Префиксы для маршрутизации сообщений к контроллерам
+        config.setApplicationDestinationPrefixes("/app");
+        
+        // Маршрутизация персональных сообщений
+        config.setUserDestinationPrefix("/user");
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.addEndpoint("/ws").setAllowedOrigins("http://localhost:8080").withSockJS();
-    }///Илюха обрщается сюда
+        // Основной эндпоинт для подключения WebSocket
+        registry.addEndpoint("/ws")
+                .setAllowedOriginPatterns("*")
+                .withSockJS();
+                
+        // Дополнительный эндпоинт для гостей отеля
+        registry.addEndpoint("/guest-ws")
+                .setAllowedOriginPatterns("*")
+                .withSockJS();
+    }
 }
 
