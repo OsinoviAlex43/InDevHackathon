@@ -3,6 +3,7 @@ package by.osinovii.hacathonback.controllers;
 import by.osinovii.hacathonback.entities.Guest;
 import by.osinovii.hacathonback.entities.Room;
 import by.osinovii.hacathonback.services.HostelService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -15,13 +16,10 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/test")
+@RequiredArgsConstructor
 public class HotelTestController {
 
     private final HostelService hostelService;
-
-    public HotelTestController(HostelService hostelService) {
-        this.hostelService = hostelService;
-    }
 
     @GetMapping("/health")
     public ResponseEntity<Map<String, String>> healthCheck() {
