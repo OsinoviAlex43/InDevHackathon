@@ -3,6 +3,7 @@ package by.osinovii.hacathonback.controllers;
 import by.osinovii.hacathonback.entities.Guest;
 import by.osinovii.hacathonback.entities.Room;
 import by.osinovii.hacathonback.services.GuestService;
+import by.osinovii.hacathonback.services.HotelService;
 import by.osinovii.hacathonback.services.RoomService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +30,7 @@ public class GuestWebSocketController {
     private final SimpMessagingTemplate messagingTemplate;
     private final GuestService guestService;
     private final RoomService roomService;
+    private final HotelService hotelService;
     
     /**
      * Получение информации о своей комнате
@@ -72,16 +74,7 @@ public class GuestWebSocketController {
             }
         } catch (Exception e) {
             log.error("Ошибка при получении информации о комнате гостя", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", "Ошибка при получении информации о комнате: " + e.getMessage());
-            
-            String requesterId = payload.getOrDefault("requesterId", "0").toString();
-            messagingTemplate.convertAndSendToUser(
-                    requesterId,
-                    "/queue/error",
-                    errorResponse
-            );
+            handleError(payload, "Ошибка при получении информации о комнате: " + e.getMessage());
         }
     }
     
@@ -129,16 +122,7 @@ public class GuestWebSocketController {
             }
         } catch (Exception e) {
             log.error("Ошибка при получении информации о госте", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", "Ошибка при получении информации: " + e.getMessage());
-            
-            String requesterId = payload.getOrDefault("requesterId", "0").toString();
-            messagingTemplate.convertAndSendToUser(
-                    requesterId,
-                    "/queue/error",
-                    errorResponse
-            );
+            handleError(payload, "Ошибка при получении информации: " + e.getMessage());
         }
     }
     
@@ -158,14 +142,8 @@ public class GuestWebSocketController {
                 Guest guest = guestOpt.get();
                 Room room = guest.getRoom();
                 
-                // Здесь была бы реальная логика открытия двери
-                // Это заглушка с успешным ответом
-                
-                Map<String, Object> response = new HashMap<>();
-                response.put("success", true);
-                response.put("message", "Дверь комнаты " + room.getRoomNumber() + " успешно открыта");
-                response.put("doorStatus", "OPEN");
-                response.put("timestamp", java.time.LocalDateTime.now().toString());
+                // Вызов сервиса для симуляции открытия двери
+                Map<String, Object> response = hotelService.simulateDoorOpen(guestId, room.getRoomNumber());
                 
                 messagingTemplate.convertAndSendToUser(
                         requesterId,
@@ -185,16 +163,7 @@ public class GuestWebSocketController {
             }
         } catch (Exception e) {
             log.error("Ошибка при открытии двери", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", "Ошибка при открытии двери: " + e.getMessage());
-            
-            String requesterId = payload.getOrDefault("requesterId", "0").toString();
-            messagingTemplate.convertAndSendToUser(
-                    requesterId,
-                    "/queue/error",
-                    errorResponse
-            );
+            handleError(payload, "Ошибка при открытии двери: " + e.getMessage());
         }
     }
     
@@ -214,14 +183,8 @@ public class GuestWebSocketController {
                 Guest guest = guestOpt.get();
                 Room room = guest.getRoom();
                 
-                // Здесь была бы реальная логика закрытия двери
-                // Это заглушка с успешным ответом
-                
-                Map<String, Object> response = new HashMap<>();
-                response.put("success", true);
-                response.put("message", "Дверь комнаты " + room.getRoomNumber() + " успешно закрыта");
-                response.put("doorStatus", "CLOSED");
-                response.put("timestamp", java.time.LocalDateTime.now().toString());
+                // Вызов сервиса для симуляции закрытия двери
+                Map<String, Object> response = hotelService.simulateDoorClose(guestId, room.getRoomNumber());
                 
                 messagingTemplate.convertAndSendToUser(
                         requesterId,
@@ -241,16 +204,7 @@ public class GuestWebSocketController {
             }
         } catch (Exception e) {
             log.error("Ошибка при закрытии двери", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", "Ошибка при закрытии двери: " + e.getMessage());
-            
-            String requesterId = payload.getOrDefault("requesterId", "0").toString();
-            messagingTemplate.convertAndSendToUser(
-                    requesterId,
-                    "/queue/error",
-                    errorResponse
-            );
+            handleError(payload, "Ошибка при закрытии двери: " + e.getMessage());
         }
     }
     
@@ -275,7 +229,9 @@ public class GuestWebSocketController {
                     throw new RuntimeException("Новая дата выезда должна быть позже текущей даты выезда и сегодняшнего дня");
                 }
                 
-                // В реальном приложении здесь был бы запрос администратору на подтверждение
+                // Создание запроса через сервис
+                Map<String, Object> response = hotelService.createExtendStayRequest(guestId, requesterId);
+                
                 // Отправка запроса администраторам
                 Map<String, Object> extendRequest = new HashMap<>();
                 extendRequest.put("guestId", guestId);
@@ -290,11 +246,6 @@ public class GuestWebSocketController {
                 );
                 
                 // Отправка подтверждения запрашивающему гостю
-                Map<String, Object> response = new HashMap<>();
-                response.put("success", true);
-                response.put("message", "Запрос на продление проживания успешно отправлен администрации");
-                response.put("requestId", "REQ-" + System.currentTimeMillis()); // В реальной системе тут был бы нормальный ID запроса
-                
                 messagingTemplate.convertAndSendToUser(
                         requesterId,
                         "/queue/extend-stay-request",
@@ -313,16 +264,7 @@ public class GuestWebSocketController {
             }
         } catch (Exception e) {
             log.error("Ошибка при запросе продления проживания", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", "Ошибка при запросе продления проживания: " + e.getMessage());
-            
-            String requesterId = payload.getOrDefault("requesterId", "0").toString();
-            messagingTemplate.convertAndSendToUser(
-                    requesterId,
-                    "/queue/error",
-                    errorResponse
-            );
+            handleError(payload, "Ошибка при запросе продления проживания: " + e.getMessage());
         }
     }
     
@@ -339,12 +281,11 @@ public class GuestWebSocketController {
             
             Optional<Guest> guestOpt = guestService.findGuestById(guestId);
             if (guestOpt.isPresent()) {
-                // Симуляция статуса климатической системы
-                Map<String, Object> climateStatus = new HashMap<>();
-                climateStatus.put("temperature", 22.5);
-                climateStatus.put("humidity", 45);
-                climateStatus.put("mode", "AUTO");
-                climateStatus.put("isOn", true);
+                Guest guest = guestOpt.get();
+                String roomNumber = guest.getRoom().getRoomNumber();
+                
+                // Получение статуса через сервис
+                Map<String, Object> climateStatus = hotelService.getClimateStatus(guestId, roomNumber);
                 
                 messagingTemplate.convertAndSendToUser(
                         requesterId,
@@ -364,16 +305,7 @@ public class GuestWebSocketController {
             }
         } catch (Exception e) {
             log.error("Ошибка при получении статуса климатической системы", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", "Ошибка при получении статуса климатической системы: " + e.getMessage());
-            
-            String requesterId = payload.getOrDefault("requesterId", "0").toString();
-            messagingTemplate.convertAndSendToUser(
-                    requesterId,
-                    "/queue/error",
-                    errorResponse
-            );
+            handleError(payload, "Ошибка при получении статуса климатической системы: " + e.getMessage());
         }
     }
     
@@ -392,13 +324,10 @@ public class GuestWebSocketController {
             Optional<Guest> guestOpt = guestService.findGuestById(guestId);
             if (guestOpt.isPresent()) {
                 Guest guest = guestOpt.get();
+                String roomNumber = guest.getRoom().getRoomNumber();
                 
-                // Симуляция установки температуры
-                Map<String, Object> response = new HashMap<>();
-                response.put("success", true);
-                response.put("message", "Температура в комнате " + guest.getRoom().getRoomNumber() + " установлена на " + temperature + "°C");
-                response.put("temperature", temperature);
-                response.put("timestamp", java.time.LocalDateTime.now().toString());
+                // Установка температуры через сервис
+                Map<String, Object> response = hotelService.setTemperature(guestId, roomNumber, temperature);
                 
                 messagingTemplate.convertAndSendToUser(
                         requesterId,
@@ -418,16 +347,23 @@ public class GuestWebSocketController {
             }
         } catch (Exception e) {
             log.error("Ошибка при установке температуры", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("success", false);
-            errorResponse.put("message", "Ошибка при установке температуры: " + e.getMessage());
-            
-            String requesterId = payload.getOrDefault("requesterId", "0").toString();
-            messagingTemplate.convertAndSendToUser(
-                    requesterId,
-                    "/queue/error",
-                    errorResponse
-            );
+            handleError(payload, "Ошибка при установке температуры: " + e.getMessage());
         }
+    }
+    
+    /**
+     * Общий метод обработки ошибок
+     */
+    private void handleError(Map<String, Object> payload, String errorMessage) {
+        String requesterId = payload.getOrDefault("requesterId", "0").toString();
+        Map<String, Object> errorResponse = new HashMap<>();
+        errorResponse.put("success", false);
+        errorResponse.put("message", errorMessage);
+        
+        messagingTemplate.convertAndSendToUser(
+                requesterId,
+                "/queue/error",
+                errorResponse
+        );
     }
 } 
