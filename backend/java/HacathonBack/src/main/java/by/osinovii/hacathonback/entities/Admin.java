@@ -19,19 +19,19 @@ public class Admin {
     @Column(nullable = false, unique = true, length = 50)
     private String username;
 
-    @Column(name="password_hash", nullable = false, length = 255)
+    @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
-    @Column(name="full_name", length = 200)
+    @Column(name = "full_name", length = 200)
     private String fullName;
 
     @Column(length = 200)
     private String email;
 
-    @Column(name="created_at", nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
-    @Column(name="updated_at", nullable = false)
+    @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
     public Admin() {
