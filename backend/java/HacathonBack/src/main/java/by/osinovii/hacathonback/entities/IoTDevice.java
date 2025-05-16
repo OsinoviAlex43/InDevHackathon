@@ -1,4 +1,4 @@
-package by.osinovii.hacathonback.models;
+package by.osinovii.hacathonback.entities;
 
 import lombok.Data;
 
