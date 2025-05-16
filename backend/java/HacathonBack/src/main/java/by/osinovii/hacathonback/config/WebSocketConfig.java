@@ -1,4 +1,4 @@
-package by.osinovii.hacathonback.services.api;
+package by.osinovii.hacathonback.config;
 
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
