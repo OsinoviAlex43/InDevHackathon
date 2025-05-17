@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket STOMP Test Client</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.5.1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stomp-websocket@2.3.4-next/lib/stomp.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .control-panel, .message-panel {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .connection-status {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        button {
+            padding: 8px 12px;
+            margin-right: 5px;
+            margin-bottom: 5px;
+            cursor: pointer;
+        }
+        .button-group {
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+        #messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background-color: #f9f9f9;
+        }
+        .message {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        .sent {
+            color: #0066cc;
+        }
+        .received {
+            color: #006600;
+        }
+        .error {
+            color: #cc0000;
+        }
+        h2 {
+            margin-top: 0;
+        }
+        .card {
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket STOMP Test Client</h1>
+    
+    <div class="control-panel">
+        <div id="connection-status" class="connection-status disconnected">
+            Статус: Отключено
+        </div>
+        
+        <h2>Подключение</h2>
+        <div class="button-group">
+            <button id="connect-main" class="connect-btn">Подключиться к /ws</button>
+            <button id="connect-guest" class="connect-btn">Подключиться к /guest-ws</button>
+            <button id="disconnect" disabled>Отключиться</button>
+        </div>
+    </div>
+    
+    <div class="message-panel">
+        <h2>Подписка на топики</h2>
+        <div class="button-group">
+            <button id="subscribe-messages" class="subscribe-btn" data-topic="/topic/messages">Подписаться на /topic/messages</button>
+            <button id="subscribe-notifications" class="subscribe-btn" data-topic="/topic/notifications">Подписаться на /topic/notifications</button>
+            <button id="subscribe-updates" class="subscribe-btn" data-topic="/topic/updates">Подписаться на /topic/updates</button>
+            <button id="unsubscribe-all" disabled>Отписаться от всех</button>
+        </div>
+
+        <div class="card">
+            <strong>Активная подписка:</strong>
+            <span id="active-subscription">Нет</span>
+        </div>
+    </div>
+
+    <div class="message-panel">
+        <h2>Отправка сообщений</h2>
+        <div class="button-group">
+            <button id="send-message-btn" class="send-btn" data-destination="/app/message" data-content='{"content": "Тестовое сообщение"}'>
+                Отправить на /app/message
+            </button>
+            <button id="send-chat-btn" class="send-btn" data-destination="/app/chat" data-content='{"text": "Привет всем!", "sender": "Тест"}'>
+                Отправить в чат
+            </button>
+            <button id="send-notification-btn" class="send-btn" data-destination="/app/notify" data-content='{"title": "Уведомление", "body": "Это тестовое уведомление"}'>
+                Отправить уведомление
+            </button>
+        </div>
+    </div>
+    
+    <div class="message-panel">
+        <h2>Журнал сообщений</h2>
+        <button id="clear-log">Очистить журнал</button>
+        <div id="messages"></div>
+    </div>
+
+    <script>
+        let stompClient = null;
+        let currentSubscriptions = {};
+        
+        function connect(endpoint) {
+            // Отключаемся, если уже подключены
+            if (stompClient !== null) {
+                disconnect();
+            }
+            
+            const socket = new SockJS(endpoint);
+            stompClient = Stomp.over(socket);
+            
+            // Отключаем логирование STOMP
+            stompClient.debug = null;
+            
+            stompClient.connect({}, 
+                function(frame) {
+                    // Успешное подключение
+                    updateConnectionStatus(true);
+                    log("Подключено к " + endpoint + ": " + frame, "info");
+                    document.querySelectorAll('.connect-btn').forEach(btn => btn.disabled = true);
+                    document.getElementById('disconnect').disabled = false;
+                },
+                function(error) {
+                    // Ошибка подключения
+                    log("Ошибка подключения: " + error, "error");
+                    updateConnectionStatus(false);
+                    disconnect();
+                }
+            );
+        }
+        
+        function disconnect() {
+            if (stompClient !== null) {
+                unsubscribeAll();
+                stompClient.disconnect();
+                stompClient = null;
+            }
+            updateConnectionStatus(false);
+            document.querySelectorAll('.connect-btn').forEach(btn => btn.disabled = false);
+            document.getElementById('disconnect').disabled = true;
+        }
+        
+        function subscribe(topic) {
+            if (stompClient && stompClient.connected) {
+                // Если уже подписаны на этот топик, сначала отписываемся
+                if (currentSubscriptions[topic]) {
+                    currentSubscriptions[topic].unsubscribe();
+                    delete currentSubscriptions[topic];
+                }
+                
+                // Подписываемся на топик
+                currentSubscriptions[topic] = stompClient.subscribe(topic, function(message) {
+                    log("Получено от " + topic + ": " + message.body, "received");
+                });
+                
+                log("Подписка на " + topic + " выполнена", "info");
+                updateSubscriptionStatus();
+                document.getElementById('unsubscribe-all').disabled = Object.keys(currentSubscriptions).length === 0;
+            } else {
+                log("Нельзя подписаться: соединение не установлено", "error");
+            }
+        }
+        
+        function unsubscribeAll() {
+            if (Object.keys(currentSubscriptions).length > 0) {
+                for (let topic in currentSubscriptions) {
+                    if (currentSubscriptions.hasOwnProperty(topic)) {
+                        currentSubscriptions[topic].unsubscribe();
+                    }
+                }
+                currentSubscriptions = {};
+                log("Отписка от всех топиков выполнена", "info");
+                updateSubscriptionStatus();
+                document.getElementById('unsubscribe-all').disabled = true;
+            }
+        }
+        
+        function sendMessage(destination, message) {
+            if (stompClient && stompClient.connected) {
+                try {
+                    // Проверяем, что JSON корректный (если это строка)
+                    const jsonMessage = typeof message === 'string' ? JSON.parse(message) : message;
+                    const stringMessage = typeof message === 'string' ? message : JSON.stringify(message);
+                    
+                    stompClient.send(destination, {}, stringMessage);
+                    log("Отправлено на " + destination + ": " + stringMessage, "sent");
+                } catch (e) {
+                    log("Ошибка в формате JSON: " + e, "error");
+                }
+            } else {
+                log("Нельзя отправить: соединение не установлено", "error");
+            }
+        }
+        
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connection-status');
+            if (connected) {
+                statusElement.className = "connection-status connected";
+                statusElement.textContent = "Статус: Подключено";
+            } else {
+                statusElement.className = "connection-status disconnected";
+                statusElement.textContent = "Статус: Отключено";
+            }
+        }
+        
+        function updateSubscriptionStatus() {
+            const topics = Object.keys(currentSubscriptions);
+            const statusElement = document.getElementById('active-subscription');
+            
+            if (topics.length === 0) {
+                statusElement.textContent = "Нет";
+            } else {
+                statusElement.textContent = topics.join(", ");
+            }
+        }
+        
+        function log(message, type) {
+            const messagesContainer = document.getElementById('messages');
+            const messageElement = document.createElement('div');
+            messageElement.className = 'message ' + (type || 'info');
+            messageElement.textContent = message;
+            messagesContainer.appendChild(messageElement);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        function clearLog() {
+            const messagesContainer = document.getElementById('messages');
+            messagesContainer.innerHTML = '';
+        }
+        
+        // Назначаем обработчики событий
+        document.addEventListener('DOMContentLoaded', function() {
+            // Кнопки подключения
+            document.getElementById('connect-main').addEventListener('click', function() {
+                connect('/ws');
+            });
+            
+            document.getElementById('connect-guest').addEventListener('click', function() {
+                connect('/guest-ws');
+            });
+            
+            document.getElementById('disconnect').addEventListener('click', disconnect);
+            
+            // Кнопки подписки
+            document.querySelectorAll('.subscribe-btn').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    const topic = this.getAttribute('data-topic');
+                    subscribe(topic);
+                });
+            });
+            
+            document.getElementById('unsubscribe-all').addEventListener('click', unsubscribeAll);
+            
+            // Кнопки отправки сообщений
+            document.querySelectorAll('.send-btn').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    const destination = this.getAttribute('data-destination');
+                    const content = this.getAttribute('data-content');
+                    sendMessage(destination, content);
+                });
+            });
+            
+            // Очистка журнала
+            document.getElementById('clear-log').addEventListener('click', clearLog);
+        });
+    </script>
+</body>
+</html> 
