@@ -1,0 +1,437 @@
+:root {
+  --base-font-size: 14px;
+  
+  /* Updated modern color scheme */
+  --primary-color: #6366f1;
+  --primary-light: #818cf8;
+  --primary-dark: #4f46e5;
+  --secondary-color: #ec4899;
+  --secondary-light: #f472b6;
+  --secondary-dark: #db2777;
+  
+  --background-color: #ffffff;
+  --paper-background: #ffffff;
+  --text-primary: rgba(0, 0, 0, 0.87);
+  --text-secondary: rgba(0, 0, 0, 0.6);
+  --divider-color: rgba(0, 0, 0, 0.12);
+  --card-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.2), 0 4px 5px 0 rgba(0, 0, 0, 0.14), 0 1px 10px 0 rgba(0, 0, 0, 0.12);
+  --transition-duration: 0.3s;
+  
+  /* Advanced Glassmorphism variables - Light Theme */
+  --glass-background: rgba(255, 255, 255, 0.25);
+  --glass-background-hover: rgba(255, 255, 255, 0.4);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.5);
+  --glass-blur: 15px;
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  --glass-glow: 0 0 20px rgba(99, 102, 241, 0.3);
+  --glass-gradient: linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.15) 100%);
+  --glass-reflective-top: rgba(255, 255, 255, 0.7);
+  --glass-reflective-bottom: rgba(255, 255, 255, 0.1);
+  
+  /* Button effects */
+  --button-gradient: linear-gradient(145deg, var(--primary-light), var(--primary-dark));
+  --button-shadow-normal: 0px 5px 15px rgba(99, 102, 241, 0.3);
+  --button-shadow-hover: 0px 8px 25px rgba(99, 102, 241, 0.5);
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: var(--base-font-size);
+  background-color: var(--background-color);
+  color: var(--text-primary);
+  transition: background-color var(--transition-duration) ease, color var(--transition-duration) ease;
+  
+  /* Enhanced background gradient for glassmorphism effect */
+  background-image: radial-gradient(circle at top right, #a5b4fc, #6366f1, #4338ca);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+.dark-mode {
+  /* Updated dark theme color palette to better match the light theme */
+  --primary-color: #818cf8;
+  --primary-light: #a5b4fc;
+  --primary-dark: #6366f1;
+  --secondary-color: #f472b6;
+  --secondary-light: #f9a8d4;
+  --secondary-dark: #ec4899;
+  
+  /* Darker background but still with a hint of purple/indigo */
+  --background-color: #0f172a;
+  --paper-background: #1e293b;
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --divider-color: rgba(255, 255, 255, 0.12);
+  --card-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.5), 0 4px 5px 0 rgba(0, 0, 0, 0.4), 0 1px 10px 0 rgba(0, 0, 0, 0.4);
+  
+  /* More consistent dark theme glassmorphism variables */
+  --glass-background: rgba(30, 41, 59, 0.7);
+  --glass-background-hover: rgba(30, 41, 59, 0.85);
+  --glass-border: 1px solid rgba(99, 102, 241, 0.2);
+  --glass-blur: 25px;
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+  --glass-glow: 0 0 25px rgba(99, 102, 241, 0.4);
+  --glass-gradient: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.7) 100%);
+  --glass-reflective-top: rgba(99, 102, 241, 0.15);
+  --glass-reflective-bottom: rgba(99, 102, 241, 0.05);
+  
+  /* Button effects - matching with the light theme but adjusted for dark mode */
+  --button-gradient: linear-gradient(145deg, var(--primary-light), var(--primary-dark));
+  --button-shadow-normal: 0px 5px 15px rgba(99, 102, 241, 0.3);
+  --button-shadow-hover: 0px 8px 25px rgba(99, 102, 241, 0.5);
+}
+
+body.dark-mode {
+  background-color: var(--background-color);
+  color: var(--text-primary);
+  
+  /* Enhanced Dark mode background gradient with same color family as light mode */
+  background-image: radial-gradient(circle at bottom left, #6366f1, #3730a3, #1e1b4b);
+  background-attachment: fixed;
+}
+
+/* Advanced Glassmorphism styles for common components */
+.glass {
+  background: var(--glass-gradient);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-radius: 16px;
+  border: var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+/* Enhanced Glass reflection effect */
+.glass::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(to bottom, var(--glass-reflective-top), transparent);
+  border-radius: 16px 16px 0 0;
+  opacity: 0.6;
+  z-index: 0;
+}
+
+.glass::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50px;
+  background: linear-gradient(to top, var(--glass-reflective-bottom), transparent);
+  border-radius: 0 0 16px 16px;
+  opacity: 0.3;
+  z-index: 0;
+}
+
+.glass:hover {
+  background: var(--glass-background-hover);
+  box-shadow: var(--glass-glow), var(--glass-shadow);
+  transform: translateY(-5px);
+}
+
+/* Advanced Apply glassmorphism to MUI components */
+.MuiPaper-root {
+  background: var(--glass-gradient) !important;
+  backdrop-filter: blur(var(--glass-blur)) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) !important;
+  border: var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.MuiPaper-root::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: linear-gradient(to bottom, var(--glass-reflective-top), transparent);
+  opacity: 0.6;
+  z-index: 0;
+}
+
+.MuiPaper-root::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 30px;
+  background: linear-gradient(to top, var(--glass-reflective-bottom), transparent);
+  opacity: 0.3;
+  z-index: 0;
+}
+
+.MuiCard-root, .MuiDialog-paper, .MuiPopover-paper {
+  background: var(--glass-gradient) !important;
+  backdrop-filter: blur(var(--glass-blur)) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) !important;
+  border: var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+  transition: all 0.3s ease;
+}
+
+.MuiCard-root:hover {
+  box-shadow: var(--glass-glow), var(--glass-shadow) !important;
+  transform: translateY(-3px);
+}
+
+.MuiTextField-root .MuiOutlinedInput-root, 
+.MuiSelect-select, 
+.MuiButton-contained:not(.MuiButton-containedPrimary):not(.MuiButton-containedSecondary),
+.MuiButton-outlined:not(.MuiButton-outlinedPrimary):not(.MuiButton-outlinedSecondary) {
+  background: var(--glass-gradient) !important;
+  backdrop-filter: blur(var(--glass-blur)) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) !important;
+  transition: all 0.3s ease;
+}
+
+/* Glow effect on focus */
+.MuiOutlinedInput-root.Mui-focused {
+  box-shadow: var(--glass-glow) !important;
+}
+
+/* Enhanced Adjust the MUI components for dark mode */
+.dark-mode .MuiPaper-root {
+  background: var(--glass-gradient) !important;
+  color: var(--text-primary);
+}
+
+.dark-mode .MuiCard-root {
+  background: var(--glass-gradient) !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+
+/* Enhanced Dark mode inputs */
+.dark-mode .MuiOutlinedInput-root {
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+.dark-mode .MuiOutlinedInput-root.Mui-focused {
+  border-color: rgba(99, 102, 241, 0.6) !important;
+}
+
+.dark-mode .MuiInputLabel-root {
+  color: var(--text-secondary) !important;
+}
+
+.dark-mode .MuiInputLabel-root.Mui-focused {
+  color: var(--primary-light) !important;
+}
+
+/* Enhanced Tables with glassmorphism */
+.MuiTableContainer-root {
+  background: var(--glass-gradient) !important;
+  backdrop-filter: blur(var(--glass-blur)) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) !important;
+  border-radius: 16px;
+  overflow: hidden;
+  border: var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+  position: relative;
+}
+
+/* Enhanced button styles */
+.MuiButton-containedPrimary, 
+.MuiButton-containedSecondary {
+  background: var(--button-gradient) !important;
+  box-shadow: var(--button-shadow-normal);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  border-radius: 8px !important;
+}
+
+.MuiButton-containedPrimary::before,
+.MuiButton-containedSecondary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: 0.5s;
+}
+
+.MuiButton-containedPrimary:hover::before,
+.MuiButton-containedSecondary:hover::before {
+  left: 100%;
+}
+
+.MuiButton-containedPrimary:hover,
+.MuiButton-containedSecondary:hover {
+  box-shadow: var(--button-shadow-hover);
+  transform: translateY(-2px);
+}
+
+/* Special styling for dark mode buttons */
+.dark-mode .MuiButton-outlinedPrimary {
+  border-color: rgba(99, 102, 241, 0.6) !important;
+}
+
+.dark-mode .MuiButton-outlinedSecondary {
+  border-color: rgba(236, 72, 153, 0.6) !important;
+}
+
+.dark-mode .MuiButton-containedPrimary, 
+.dark-mode .MuiButton-containedSecondary {
+  box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.39);
+}
+
+/* Control button styles (for light controls) */
+.control-button {
+  background: var(--glass-gradient);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 50%;
+  border: var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.control-button::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.control-button:hover::before {
+  opacity: 1;
+}
+
+.control-button:hover {
+  transform: scale(1.1);
+  box-shadow: var(--glass-glow), var(--glass-shadow);
+}
+
+.control-button.active {
+  background: var(--button-gradient);
+  box-shadow: 0 0 20px var(--primary-light), var(--button-shadow-normal);
+}
+
+.control-button.active:hover {
+  box-shadow: 0 0 25px var(--primary-light), var(--button-shadow-hover);
+}
+
+/* Enhanced dark mode control button */
+.dark-mode .control-button {
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.dark-mode .control-button.active {
+  border-color: rgba(99, 102, 241, 0.6);
+}
+
+/* Room card layout fixes */
+.room-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px;
+}
+
+.room-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Guest list styles */
+.guest-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.guest-chip {
+  transition: all 0.3s ease;
+}
+
+.guest-chip:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--glass-shadow);
+}
+
+/* Enhanced Language selector styling with glassmorphism */
+.language-selector {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin: 20px 0;
+}
+
+.language-option {
+  padding: 12px 18px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: var(--glass-gradient);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.language-option::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(to bottom, var(--glass-reflective-top), transparent);
+  opacity: 0.5;
+}
+
+.language-option.active {
+  border: 2px solid var(--primary-color);
+  box-shadow: var(--glass-glow), var(--glass-shadow);
+  font-weight: bold;
+  transform: translateY(-3px);
+}
+
+.language-option:hover:not(.active) {
+  transform: translateY(-2px);
+  box-shadow: var(--glass-glow), var(--glass-shadow);
+}
+
+.dark-mode .language-option {
+  background: var(--glass-gradient);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.dark-mode .language-option.active {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(30, 41, 59, 0.7));
+  border-color: rgba(99, 102, 241, 0.8);
+} 
