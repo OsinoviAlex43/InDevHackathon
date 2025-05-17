@@ -1,6 +1,8 @@
 import type { Room, RoomWithSensors } from '../types/RoomTypes';
 import type { Guest } from '../types/GuestTypes';
 import SockJS from 'sockjs-client';
+import { Client } from '@stomp/stompjs';
+import type { IMessage } from '@stomp/stompjs';
 
 type MessageHandlers = {
   onRoomData?: (rooms: RoomWithSensors[]) => void;
@@ -15,7 +17,7 @@ type MessageHandlers = {
 };
 
 class NetworkAPI {
-  private socket: WebSocket | null = null;
+  private stompClient: Client | null = null;
   private isConnected = false;
   private connectionAttempts = 0;
   private readonly maxConnectionAttempts = 3;
@@ -24,7 +26,7 @@ class NetworkAPI {
   private reconnectTimeout: number | null = null;
 
   constructor() {
-    // SockJS connection will be initialized when needed
+    // STOMP client will be initialized when needed
   }
 
   // Register message handlers
@@ -32,7 +34,7 @@ class NetworkAPI {
     this.messageHandlers = { ...this.messageHandlers, ...handlers };
   }
 
-  // Connect to SockJS
+  // Connect to WebSocket server
   connect() {
     // Clear any existing reconnect timeout
     if (this.reconnectTimeout) {
@@ -41,23 +43,34 @@ class NetworkAPI {
     }
     
     // Close existing connection if any
-    if (this.socket) {
-      this.socket.close();
+    if (this.stompClient && this.stompClient.connected) {
+      this.stompClient.deactivate();
     }
     
     try {
-      console.log('Attempting to connect to SockJS...');
+      console.log('Attempting to connect to WebSocket server...');
       
-      // Create SockJS connection
-      const sockjs = new SockJS('http://192.168.65.55:8080/ws');
+      // Create new STOMP client
+      this.stompClient = new Client({
+        webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
+        debug: (str) => {
+          console.log('STOMP: ' + str);
+        },
+        reconnectDelay: 5000,
+        heartbeatIncoming: 4000,
+        heartbeatOutgoing: 4000
+      });
       
-      // SockJS implements the WebSocket interface
-      this.socket = sockjs;
-      
-      sockjs.onopen = () => {
-        console.log('SockJS connected');
+      // Setup connection event handlers
+      this.stompClient.onConnect = (frame) => {
+        console.log('STOMP Connected:', frame);
         this.isConnected = true;
         this.connectionAttempts = 0;
+        
+        // Subscribe to topic for messages
+        this.stompClient?.subscribe('/topic/messages', (message: IMessage) => {
+          this.handleIncomingMessage(message);
+        });
         
         // Send any pending messages
         this.flushPendingMessages();
@@ -66,77 +79,109 @@ class NetworkAPI {
         this.requestInitialData();
       };
       
-      sockjs.onmessage = (event) => {
-        try {
-          console.log('SockJS message received:', event.data);
-          const message = JSON.parse(event.data);
-          
-          switch (message.action) {
-            case 'initial_data':
-              if (message.data?.rooms && Array.isArray(message.data.rooms) && this.messageHandlers.onRoomData) {
-                const rooms = message.data.rooms.map(this.convertBigInts);
-                this.messageHandlers.onRoomData(rooms);
-              }
-              if (message.data?.guests && Array.isArray(message.data.guests) && this.messageHandlers.onGuestData) {
-                const guests = message.data.guests.map(this.convertBigInts);
-                this.messageHandlers.onGuestData(guests);
-              }
-              break;
-            case 'update_room':
-              if (message.data && this.messageHandlers.onRoomUpdate) {
-                const updatedRoom = this.convertBigInts(message.data);
-                this.messageHandlers.onRoomUpdate(updatedRoom);
-              }
-              break;
-            case 'add_room':
-              if (message.data && this.messageHandlers.onRoomAdded) {
-                const newRoom = this.convertBigInts(message.data);
-                this.messageHandlers.onRoomAdded(newRoom);
-              }
-              break;
-            case 'delete_room':
-              if (message.data?.id && this.messageHandlers.onRoomDeleted) {
-                this.messageHandlers.onRoomDeleted(BigInt(message.data.id));
-              }
-              break;
-            case 'update_guest':
-              if (message.data && this.messageHandlers.onGuestUpdate) {
-                const updatedGuest = this.convertBigInts(message.data);
-                this.messageHandlers.onGuestUpdate(updatedGuest);
-              }
-              break;
-            case 'add_guest':
-              if (message.data && this.messageHandlers.onGuestAdded) {
-                const newGuest = this.convertBigInts(message.data);
-                this.messageHandlers.onGuestAdded(newGuest);
-              }
-              break;
-            case 'delete_guest':
-              if (message.data?.id && this.messageHandlers.onGuestDeleted) {
-                this.messageHandlers.onGuestDeleted(BigInt(message.data.id));
-              }
-              break;
-            default:
-              console.log('Unhandled message type:', message.action);
-          }
-        } catch (error) {
-          console.error('Error processing SockJS message:', error);
-        }
-      };
-      
-      sockjs.onerror = () => {
-        console.info('SockJS error');
+      this.stompClient.onStompError = (frame) => {
+        console.error('STOMP error:', frame);
         this.handleDisconnect();
       };
       
-      sockjs.onclose = () => {
-        console.info('SockJS connection closed');
+      this.stompClient.onWebSocketClose = () => {
+        console.info('WebSocket connection closed');
         this.handleDisconnect();
       };
+      
+      this.stompClient.onWebSocketError = (event) => {
+        console.error('WebSocket error:', event);
+        this.handleDisconnect();
+      };
+      
+      // Activate connection
+      this.stompClient.activate();
     } catch (error) {
-      console.info('Failed to create SockJS connection');
-      console.error(error);
+      console.error('Failed to connect to WebSocket server:', error);
       this.handleDisconnect();
+    }
+  }
+  
+  // Handle incoming STOMP messages
+  private handleIncomingMessage(message: IMessage) {
+    try {
+      console.log('STOMP message received:', message.body);
+      const parsedMessage = JSON.parse(message.body);
+      
+      // Логируем для отладки полную структуру сообщения
+      console.log('Parsed message structure:', JSON.stringify(parsedMessage, null, 2));
+      
+      // Проверяем, есть ли ошибка от сервера
+      if (parsedMessage.action === 'error') {
+        console.error('Server error:', parsedMessage.data?.message || 'Unknown error');
+        if (this.messageHandlers.onError) {
+          this.messageHandlers.onError();
+        }
+        return;
+      }
+      
+      switch (parsedMessage.action) {
+        case 'initial_data':
+          console.log('Received initial data with rooms:', parsedMessage.data?.rooms?.length || 0, 
+                      'guests:', parsedMessage.data?.guests?.length || 0);
+          
+          if (parsedMessage.data?.rooms && Array.isArray(parsedMessage.data.rooms) && this.messageHandlers.onRoomData) {
+            // Преобразуем данные комнат и добавляем недостающие поля
+            const rooms = parsedMessage.data.rooms.map(this.preprocessRoom);
+            this.messageHandlers.onRoomData(rooms);
+          }
+          
+          if (parsedMessage.data?.guests && Array.isArray(parsedMessage.data.guests) && this.messageHandlers.onGuestData) {
+            const guests = parsedMessage.data.guests.map(this.preprocessGuest);
+            this.messageHandlers.onGuestData(guests);
+          }
+          break;
+        case 'update_room':
+          console.log('Room update message received');
+          if (parsedMessage.data && this.messageHandlers.onRoomUpdate) {
+            const updatedRoom = this.preprocessRoom(parsedMessage.data);
+            this.messageHandlers.onRoomUpdate(updatedRoom);
+          }
+          break;
+        case 'add_room':
+          console.log('New room message received');
+          if (parsedMessage.data && this.messageHandlers.onRoomAdded) {
+            const newRoom = this.preprocessRoom(parsedMessage.data);
+            this.messageHandlers.onRoomAdded(newRoom);
+          }
+          break;
+        case 'delete_room':
+          console.log('Room deletion message received');
+          if (parsedMessage.data?.id && this.messageHandlers.onRoomDeleted) {
+            // Обрабатываем удаление комнаты
+            this.messageHandlers.onRoomDeleted(BigInt(parsedMessage.data.id));
+          }
+          break;
+        case 'update_guest':
+          console.log('Guest update message received');
+          if (parsedMessage.data && this.messageHandlers.onGuestUpdate) {
+            const updatedGuest = this.preprocessGuest(parsedMessage.data);
+            this.messageHandlers.onGuestUpdate(updatedGuest);
+          }
+          break;
+        case 'add_guest':
+          console.log('New guest message received');
+          if (parsedMessage.data && this.messageHandlers.onGuestAdded) {
+            const newGuest = this.preprocessGuest(parsedMessage.data);
+            this.messageHandlers.onGuestAdded(newGuest);
+          }
+          break;
+        case 'delete_guest':
+          console.log('Guest deletion message received');
+          if (parsedMessage.data?.id && this.messageHandlers.onGuestDeleted) {
+            this.messageHandlers.onGuestDeleted(BigInt(parsedMessage.data.id));
+          }
+          break;
+        default:
+          console.log('Unhandled message type:', parsedMessage.action);
+      }
+    } catch (error) {
+      console.error('Error processing STOMP message:', error);
     }
   }
   
@@ -161,28 +206,106 @@ class NetworkAPI {
     }
   }
   
-  // Helper to convert string IDs to BigInts
-  private convertBigInts<T extends { id?: string | bigint }>(obj: T): T {
-    if (!obj) return obj;
+  // Предварительная обработка данных комнаты с сервера
+  private preprocessRoom(roomData: any): RoomWithSensors {
+    const processedRoom = { ...roomData };
     
-    const result = { ...obj };
-    
-    // Convert id to BigInt if it's a string
-    if (typeof result.id === 'string') {
-      result.id = BigInt(result.id);
+    // Преобразуем id в BigInt
+    if (typeof processedRoom.id === 'string') {
+      processedRoom.id = BigInt(processedRoom.id);
     }
     
-    // Convert room_id to BigInt if present and a string
-    if ('room_id' in result && typeof result.room_id === 'string') {
-      (result as any).room_id = BigInt(result.room_id);
+    // Если бэкенд отправляет room_type с другим регистром или написанием
+    if (processedRoom.room_type && 
+        !['standart', 'deluxe', 'suit'].includes(processedRoom.room_type)) {
+      // Приводим к ожидаемым значениям
+      if (processedRoom.room_type.toLowerCase().includes('stand')) {
+        processedRoom.room_type = 'standart';
+      } else if (processedRoom.room_type.toLowerCase().includes('del')) {
+        processedRoom.room_type = 'deluxe';
+      } else if (processedRoom.room_type.toLowerCase().includes('sui')) {
+        processedRoom.room_type = 'suit';
+      }
     }
     
-    return result;
+    // Если бэкенд отправляет status с другим регистром или написанием
+    if (processedRoom.status && 
+        !['free', 'occupied', 'service', 'cleaning', 'booked'].includes(processedRoom.status)) {
+      // Приводим к ожидаемым значениям
+      const status = processedRoom.status.toLowerCase();
+      if (status.includes('free') || status.includes('empty')) {
+        processedRoom.status = 'free';
+      } else if (status.includes('occup')) {
+        processedRoom.status = 'occupied';
+      } else if (status.includes('serv')) {
+        processedRoom.status = 'service';
+      } else if (status.includes('clean')) {
+        processedRoom.status = 'cleaning';
+      } else if (status.includes('book') || status.includes('reserv')) {
+        processedRoom.status = 'booked';
+      }
+    }
+    
+    // Обеспечиваем наличие всех необходимых свойств
+    if (!processedRoom.sensors) {
+      processedRoom.sensors = {
+        temperature: 22,
+        humidity: 45,
+        pressure: 1013,
+        lights: {
+          bathroom: false,
+          bedroom: false,
+          hallway: false
+        }
+      };
+    } else if (!processedRoom.sensors.lights) {
+      processedRoom.sensors.lights = {
+        bathroom: false,
+        bedroom: false,
+        hallway: false
+      };
+    }
+    
+    // Устанавливаем значения по умолчанию для отсутствующих полей
+    if (processedRoom.doorLocked === undefined) {
+      processedRoom.doorLocked = true;
+    }
+    
+    if (!processedRoom.guests) {
+      processedRoom.guests = [];
+    }
+    
+    if (processedRoom.max_guests === undefined) {
+      processedRoom.max_guests = 2;
+    }
+    
+    if (processedRoom.current_guests_count === undefined) {
+      processedRoom.current_guests_count = processedRoom.guests.length || 0;
+    }
+    
+    return processedRoom as RoomWithSensors;
+  }
+  
+  // Предварительная обработка данных гостя с сервера
+  private preprocessGuest(guestData: any): Guest {
+    const processedGuest = { ...guestData };
+    
+    // Преобразуем id в BigInt
+    if (typeof processedGuest.id === 'string') {
+      processedGuest.id = BigInt(processedGuest.id);
+    }
+    
+    // Преобразуем room_id в BigInt, если он есть
+    if (processedGuest.room_id && typeof processedGuest.room_id === 'string') {
+      processedGuest.room_id = BigInt(processedGuest.room_id);
+    }
+    
+    return processedGuest as Guest;
   }
 
   // Send any pending messages
   private flushPendingMessages() {
-    if (this.pendingMessages.length > 0 && this.isConnected) {
+    if (this.pendingMessages.length > 0 && this.isConnected && this.stompClient?.connected) {
       console.log(`Sending ${this.pendingMessages.length} pending messages`);
       
       for (const message of this.pendingMessages) {
@@ -195,18 +318,26 @@ class NetworkAPI {
 
   // Request initial data
   requestInitialData() {
-    this.sendMessage('get_data', {});
+    console.log('Requesting initial room and guest data');
+    this.sendMessage('get_rooms', {});
+    this.sendMessage('get_guests', {});
   }
 
-  // Send message through SockJS
+  // Send message through STOMP
   sendMessage(action: string, data: any): boolean {
-    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+    if (this.stompClient && this.stompClient.connected) {
       // Convert BigInt to string before sending
       const preparedData = this.serializeData(data);
       
       const message = JSON.stringify({ action, data: preparedData });
-      console.log('Sending SockJS message:', message);
-      this.socket.send(message);
+      console.log('Sending STOMP message:', message);
+      
+      // Send message to the Spring WebSocket controller's endpoint
+      this.stompClient.publish({
+        destination: '/app/socket',
+        body: message
+      });
+      
       return true;
     } else {
       // Store the message to send when reconnected
@@ -216,6 +347,7 @@ class NetworkAPI {
       if (!this.isConnected && this.connectionAttempts < this.maxConnectionAttempts) {
         this.connect();
       }
+      
       return false;
     }
   }
@@ -245,7 +377,7 @@ class NetworkAPI {
 
   // Check if connected
   isSocketConnected(): boolean {
-    return this.isConnected;
+    return this.isConnected && !!this.stompClient?.connected;
   }
 }
 
