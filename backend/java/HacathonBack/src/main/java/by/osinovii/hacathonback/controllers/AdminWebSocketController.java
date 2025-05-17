@@ -83,6 +83,8 @@ public class AdminWebSocketController {
             log.error("Ошибка при получении комнат по статусу", e);
             handleError(payload, "Ошибка при получении комнат по статусу: " + e.getMessage());
         }
+
+        return null;
     }
 
     /**
