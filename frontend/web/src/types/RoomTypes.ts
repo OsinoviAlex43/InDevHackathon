@@ -1,4 +1,4 @@
-export type RoomType = 'standart' | 'deluxe' | 'suit';
+export type RoomType = 'standart' | 'deluxe' | 'suit' | 'suite';
 export type RoomStatus = 'free' | 'occupied' | 'service' | 'cleaning' | 'booked';
 
 export interface RoomSensors {

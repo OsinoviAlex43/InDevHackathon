@@ -77,13 +77,16 @@ export class GuestStore {
     // Initialize API connection
     this.initializeAPI();
     
-    // Set fallback data if API fails
+    // Устанавливаем состояние загрузки
+    this.isLoading = true;
+    
+    // Таймаут для отображения ошибки, если сервер не отвечает
     setTimeout(() => {
       if (this.guests.length === 0) {
-        console.log('Falling back to mock guest data');
-        this.loadMockData();
+        console.error('Сервер не отвечает - гости не загружены');
+        this.isLoading = false;
       }
-    }, 5000);
+    }, 10000);
   }
 
   // Initialize API and register handlers
@@ -94,8 +97,12 @@ export class GuestStore {
       onGuestUpdate: this.handleGuestUpdate, 
       onGuestAdded: this.handleNewGuest,
       onGuestDeleted: this.handleGuestDelete,
-      onError: this.loadMockData
+      // Убираем fallback на моки при ошибке
+      onError: () => console.error('Ошибка соединения с API')
     });
+    
+    // Запрашиваем начальные данные
+    networkAPI.sendMessage('guests', {});
   }
 
   loadMockData = () => {
@@ -111,13 +118,13 @@ export class GuestStore {
     this.isLoading = true;
     networkAPI.sendMessage('get_guests', {});
     
-    // Fallback in case the server doesn't respond
+    // Проверяем, пришел ли ответ от сервера
     setTimeout(() => {
       if (this.isLoading && this.guests.length === 0) {
-        console.log('No response from guest server, loading mock data');
-        this.loadMockData();
+        console.error('Сервер не отвечает на запрос гостей');
+        this.isLoading = false;
       }
-    }, 3000);
+    }, 5000);
   }
   
   handleInitialData = (guestsData: Guest[]) => {
@@ -325,38 +332,54 @@ export class GuestStore {
   addGuest = (guest: Omit<Guest, 'id' | 'created_at' | 'updated_at'>) => {
     this.isLoading = true;
     
-    // Try to send via network API
+    // Отправляем запрос через API
     const result = networkAPI.sendMessage('add_guest', guest);
     
-    // If network API fails, use local mock operation
+    // Если не удалось отправить запрос, показываем ошибку
     if (!result) {
-      this.mockAddGuest(guest);
+      console.error('Не удалось отправить запрос на добавление гостя - нет соединения с сервером');
+      this.isLoading = false;
+      return false;
     }
+    
+    return true;
   };
 
   updateGuest = (guestId: bigint, updates: Partial<Guest>) => {
-    // Send update through network API
+    this.isLoading = true;
+    
+    // Отправляем запрос на обновление через API
     const result = networkAPI.sendMessage('update_guest', { 
       id: guestId, 
       ...updates 
     });
     
-    // If network API fails, use local mock operation
+    // Если не удалось отправить запрос, показываем ошибку
     if (!result) {
-      this.mockUpdateGuest({ id: guestId, ...updates });
+      console.error('Не удалось отправить запрос на обновление гостя - нет соединения с сервером');
+      this.isLoading = false;
+      return false;
     }
+    
+    return true;
   };
 
   deleteGuest = (guestId: bigint) => {
-    // Send delete request through network API
+    this.isLoading = true;
+    
+    // Отправляем запрос на удаление через API
     const result = networkAPI.sendMessage('delete_guest', { 
       id: guestId
     });
     
-    // If network API fails, use local mock operation
+    // Если не удалось отправить запрос, показываем ошибку
     if (!result) {
-      this.mockDeleteGuest({ id: guestId });
+      console.error('Не удалось отправить запрос на удаление гостя - нет соединения с сервером');
+      this.isLoading = false;
+      return false;
     }
+    
+    return true;
   };
 
   checkInGuest = (guestId: bigint, roomId: bigint) => {

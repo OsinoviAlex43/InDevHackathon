@@ -157,19 +157,23 @@ export class RoomStore {
       onRoomUpdate: this.handleRoomUpdate,
       onRoomAdded: this.handleNewRoom,
       onRoomDeleted: this.handleRoomDelete,
-      onError: this.loadMockData
+      // Убираем fallback на моки при ошибке
+      onError: () => console.error('Ошибка соединения с API')
     });
     
     // Start connection
     networkAPI.connect();
     
-    // Set fallback data if API fails
+    // Устанавливаем состояние загрузки
+    this.isLoading = true;
+    
+    // Таймаут для отображения ошибки, если сервер не отвечает
     setTimeout(() => {
       if (this.rooms.length === 0) {
-        console.log('Falling back to mock data');
-        this.loadMockData();
+        console.error('Сервер не отвечает');
+        this.isLoading = false;
       }
-    }, 5000);
+    }, 10000);
   }
 
   // Save favorites to localStorage
@@ -371,53 +375,52 @@ export class RoomStore {
   addRoom = (room: Omit<Room, 'id' | 'created_at' | 'updated_at'>) => {
     this.isLoading = true;
     
-    // Use network API to add room
+    // Отправляем запрос на добавление комнаты через API
     const result = networkAPI.sendMessage('add_room', room);
     
     if (!result) {
-      // If network API fails, create a mock room locally
-      const newRoom: RoomWithSensors = {
-        ...room,
-        id: BigInt(Date.now()),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        sensors: {
-          lights: {
-            bathroom: false,
-            bedroom: false,
-            hallway: false
-          },
-          temperature: 21,
-          humidity: 40,
-          pressure: 1013
-        },
-        doorLocked: true,
-        guests: [],
-        max_guests: room.max_guests || 2,
-        current_guests_count: 0
-      };
-      
-      this.handleNewRoom(newRoom);
+      console.error('Не удалось отправить запрос на добавление комнаты - нет соединения с сервером');
+      this.isLoading = false;
+      return false;
     }
+    
+    return true;
   }
   
   updateRoom = (roomId: bigint, updates: Partial<Room>) => {
+    this.isLoading = true;
+    
     const room = this.rooms.find(r => r.id === roomId);
-    if (!room) return;
+    if (!room) {
+      this.isLoading = false;
+      return false;
+    }
     
-    // Use network API to update room
-    networkAPI.sendMessage('update_room', { id: roomId, ...updates });
+    // Отправляем запрос на обновление комнаты через API
+    const result = networkAPI.sendMessage('update_room', { id: roomId, ...updates });
     
-    // Optimistically update the local state
-    this.handleRoomUpdate({ ...room, ...updates });
+    if (!result) {
+      console.error('Не удалось отправить запрос на обновление комнаты - нет соединения с сервером');
+      this.isLoading = false;
+      return false;
+    }
+    
+    return true;
   }
   
   deleteRoom = (roomId: bigint) => {
-    // Use network API to delete room
-    networkAPI.sendMessage('delete_room', { id: roomId });
+    this.isLoading = true;
     
-    // Optimistically update the local state
-    this.handleRoomDelete(roomId);
+    // Отправляем запрос на удаление комнаты через API
+    const result = networkAPI.sendMessage('delete_room', { id: roomId });
+    
+    if (!result) {
+      console.error('Не удалось отправить запрос на удаление комнаты - нет соединения с сервером');
+      this.isLoading = false;
+      return false;
+    }
+    
+    return true;
   }
 
   toggleDoorLock = (roomId: bigint) => {

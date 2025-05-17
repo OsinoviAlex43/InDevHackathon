@@ -82,19 +82,19 @@ class RootStore {
   settingsStore = new SettingsStore();
   
   constructor() {
-    // Initialize mock data for all stores
-    this.initializeMockData();
+    // Инициализируем соединение с API вместо использования моков
+    this.initializeAPIData();
   }
   
-  initializeMockData() {
-    // Initialize room store with mock data
-    if (this.roomStore.loadMockData) {
-      this.roomStore.loadMockData();
+  initializeAPIData() {
+    // Инициализируем соединение с сервером и получаем реальные данные
+    if (this.roomStore.initializeAPI) {
+      this.roomStore.initializeAPI();
     }
     
-    // Initialize guest store with mock data
-    if ((this.guestStore as any).loadMockData) {
-      (this.guestStore as any).loadMockData();
+    // Инициализируем соединение с сервером для гостей
+    if ((this.guestStore as any).initializeAPI) {
+      (this.guestStore as any).initializeAPI();
     }
   }
 }

@@ -321,11 +321,8 @@ const GuestsPage: React.FC = observer(() => {
   const isSmall = useMediaQuery(theme.breakpoints.down('sm'));
   
   useEffect(() => {
-    // Initialize guest store if needed
+    // Инициализируем соединение с API и загружаем данные гостей
     guestStore.ensureInitialized();
-    if (guestStore.filteredGuests?.length === 0) {
-      guestStore.loadMockData();
-    }
   }, [guestStore]);
   
   const { isLoading, filteredGuests = [] } = guestStore;
