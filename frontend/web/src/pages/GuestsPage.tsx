@@ -68,12 +68,11 @@ interface GuestStoreExtended {
   sortOptions?: GuestSortOptions;
   setFilters: (filters: GuestFilters) => void;
   setSortOptions: (options: GuestSortOptions) => void;
-  checkInGuest?: (guestId: bigint, roomId: bigint) => void;
-  checkOutGuest?: (guestId: bigint) => void;
-  deleteGuest?: (guestId: bigint) => void;
-  addGuest?: (guestData: any) => void;
+  checkInGuest?: (guestId: string, roomId: string, checkInDate?: string) => void;
+  checkOutGuest?: (guestId: string, checkOutDate?: string) => void;
+  deleteGuest?: (guestId: string) => void;
+  addGuest?: (firstName: string, lastName: string, email: string, phone: string) => void;
   ensureInitialized: () => void;
-  loadMockData: () => void;
 }
 
 // UI state store for Guests page
@@ -252,27 +251,13 @@ class GuestsPageStore {
   createGuest() {
     if (!this.validateNewGuestForm()) return;
     
-    const guestData: any = {
-      first_name: this.newGuest.first_name,
-      last_name: this.newGuest.last_name,
-      email: this.newGuest.email,
-      phone: this.newGuest.phone
-    };
-    
-    if (this.newGuest.check_in_date) {
-      guestData.check_in_date = this.newGuest.check_in_date;
-    }
-    
-    if (this.newGuest.check_out_date) {
-      guestData.check_out_date = this.newGuest.check_out_date;
-    }
-    
-    if (this.newGuest.room_id) {
-      guestData.room_id = BigInt(this.newGuest.room_id);
-    }
-    
     if (this.guestStore.addGuest) {
-      this.guestStore.addGuest(guestData);
+      this.guestStore.addGuest(
+        this.newGuest.first_name,
+        this.newGuest.last_name,
+        this.newGuest.email,
+        this.newGuest.phone
+      );
     }
     this.setCreateGuestDialogOpen(false);
   }
@@ -323,9 +308,6 @@ const GuestsPage: React.FC = observer(() => {
   useEffect(() => {
     // Initialize guest store if needed
     guestStore.ensureInitialized();
-    if (guestStore.filteredGuests?.length === 0) {
-      guestStore.loadMockData();
-    }
   }, [guestStore]);
   
   const { isLoading, filteredGuests = [] } = guestStore;
@@ -345,7 +327,7 @@ const GuestsPage: React.FC = observer(() => {
     
     const randomRoom = availableRooms[Math.floor(Math.random() * availableRooms.length)];
     if (guestStore.checkInGuest) {
-      guestStore.checkInGuest(guest.id, randomRoom.id);
+      guestStore.checkInGuest(guest.id.toString(), randomRoom.id.toString());
     }
   };
   
@@ -354,22 +336,22 @@ const GuestsPage: React.FC = observer(() => {
     if (!guest.room_id) return;
     
     if (guestStore.checkOutGuest) {
-      guestStore.checkOutGuest(guest.id);
+      guestStore.checkOutGuest(guest.id.toString());
     }
   };
   
-  const handleViewGuest = (guestId: bigint) => {
+  const handleViewGuest = (guestId: string) => {
     navigate(`/guests/${guestId}`);
   };
   
-  const handleEditGuest = (guestId: bigint) => {
+  const handleEditGuest = (guestId: string) => {
     navigate(`/guests/${guestId}/edit`);
   };
   
   const handleDeleteGuest = (guest: Guest) => {
     if (confirm(`Are you sure you want to delete guest ${guest.first_name} ${guest.last_name}?`)) {
       if (guestStore.deleteGuest) {
-        guestStore.deleteGuest(guest.id);
+        guestStore.deleteGuest(guest.id.toString());
       }
     }
   };
@@ -510,7 +492,7 @@ const GuestsPage: React.FC = observer(() => {
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Box>
                       <IconButton 
-                        onClick={() => handleViewGuest(guest.id)} 
+                        onClick={() => handleViewGuest(guest.id.toString())} 
                         size="small"
                         className="glass-icon-button"
                         sx={{ backdropFilter: 'blur(8px)', mx: 0.5 }}
@@ -519,7 +501,7 @@ const GuestsPage: React.FC = observer(() => {
                       </IconButton>
                       
                       <IconButton 
-                        onClick={() => handleEditGuest(guest.id)} 
+                        onClick={() => handleEditGuest(guest.id.toString())} 
                         size="small"
                         className="glass-icon-button"
                         sx={{ backdropFilter: 'blur(8px)', mx: 0.5 }}
@@ -697,7 +679,7 @@ const GuestsPage: React.FC = observer(() => {
                         <Box>
                           <Tooltip title="View">
                             <IconButton 
-                              onClick={() => handleViewGuest(guest.id)} 
+                              onClick={() => handleViewGuest(guest.id.toString())} 
                               size="small"
                               className="glass-icon-button"
                               sx={{ 
@@ -712,7 +694,7 @@ const GuestsPage: React.FC = observer(() => {
                           {!isMobile && (
                             <Tooltip title="Edit">
                               <IconButton 
-                                onClick={() => handleEditGuest(guest.id)} 
+                                onClick={() => handleEditGuest(guest.id.toString())} 
                                 size="small"
                                 className="glass-icon-button"
                                 sx={{ 
