@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Система управления отелем - WebSocket API</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.5.1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stomp-websocket@2.3.4-next/lib/stomp.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background-color: #0d6efd;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .connection-panel {
+            background-color: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .connection-status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .connected {
+            background-color: #d1e7dd;
+            color: #0f5132;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #842029;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            background-color: #e9ecef;
+            border: none;
+            cursor: pointer;
+            margin-right: 5px;
+            border-radius: 5px 5px 0 0;
+        }
+        .tab.active {
+            background-color: white;
+            border-bottom: 2px solid #0d6efd;
+        }
+        .tab-content {
+            display: none;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .api-section {
+            margin-bottom: 30px;
+        }
+        .api-section h3 {
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .api-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        button {
+            padding: 8px 12px;
+            background-color: #0d6efd;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0b5ed7;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        #logs {
+            height: 400px;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+            font-family: monospace;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .sent {
+            color: #0d6efd;
+        }
+        .received {
+            color: #198754;
+        }
+        .error {
+            color: #dc3545;
+        }
+        .subscription {
+            color: #6f42c1;
+        }
+        .custom-form {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+        .active-subscriptions {
+            margin-top: 20px;
+        }
+        .subscription-list {
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .subscription-item {
+            padding: 5px;
+            margin-bottom: 5px;
+            border-bottom: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Система управления отелем - WebSocket API</h1>
+        </div>
+        
+        <div class="connection-panel">
+            <h2>Подключение</h2>
+            <div class="form-group">
+                <label for="endpoint-select">Конечная точка:</label>
+                <select id="endpoint-select">
+                    <option value="/ws">/ws (Основная)</option>
+                    <option value="/guest-ws">/guest-ws (Для гостей)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="user-id">ID пользователя (requesterId):</label>
+                <input type="text" id="user-id" value="user_123">
+            </div>
+            <div id="connection-status" class="connection-status disconnected">
+                Статус: Не подключено
+            </div>
+            <button id="connect-btn">Подключиться</button>
+            <button id="disconnect-btn" disabled>Отключиться</button>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab active" data-tab="hotel">Общее управление</button>
+            <button class="tab" data-tab="rooms">Комнаты</button>
+            <button class="tab" data-tab="guests">Гости</button>
+            <button class="tab" data-tab="logs">Журнал</button>
+        </div>
+        
+        <!-- Вкладка общего управления отелем -->
+        <div id="hotel-tab" class="tab-content active">
+            <h2>Общее управление отелем</h2>
+            
+            <div class="api-section">
+                <h3>Основные операции</h3>
+                <div class="api-buttons">
+                    <button class="api-btn" data-send="/app/rooms" data-subscribe="/topic/rooms">
+                        Все комнаты
+                    </button>
+                    <button class="api-btn" data-send="/app/rooms/available" data-subscribe="/topic/rooms/available">
+                        Доступные комнаты
+                    </button>
+                    <button class="api-btn" data-send="/app/rooms/occupied" data-subscribe="/topic/rooms/occupied">
+                        Занятые комнаты
+                    </button>
+                    <button class="api-btn" data-send="/app/guests" data-subscribe="/topic/guests">
+                        Все гости
+                    </button>
+                    <button class="api-btn" data-send="/app/stats" data-subscribe="/topic/stats">
+                        Статистика отеля
+                    </button>
+                    <button class="api-btn" data-send="/app/guests/today" data-subscribe="/topic/guests/today">
+                        Гости, заселенные сегодня
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Вкладка управления комнатами -->
+        <div id="rooms-tab" class="tab-content">
+            <h2>Управление комнатами</h2>
+            
+            <div class="api-section">
+                <h3>Поиск комнаты</h3>
+                <div class="form-group">
+                    <label for="room-number-search">Номер комнаты:</label>
+                    <input type="text" id="room-number-search" placeholder="Например: 101">
+                </div>
+                <button class="api-btn" id="search-room-btn">Найти комнату</button>
+            </div>
+            
+            <div class="api-section">
+                <h3>Комнаты по типу</h3>
+                <div class="form-group">
+                    <label for="room-type">Тип комнаты:</label>
+                    <select id="room-type">
+                        <option value="STANDARD">Стандартный</option>
+                        <option value="DELUXE">Делюкс</option>
+                        <option value="SUITE">Люкс</option>
+                    </select>
+                </div>
+                <button class="api-btn" id="rooms-by-type-btn">Получить комнаты</button>
+            </div>
+            
+            <div class="api-section">
+                <h3>Комнаты по ценовому диапазону</h3>
+                <div class="form-group">
+                    <label for="min-price">Минимальная цена:</label>
+                    <input type="number" id="min-price" value="1000">
+                </div>
+                <div class="form-group">
+                    <label for="max-price">Максимальная цена:</label>
+                    <input type="number" id="max-price" value="5000">
+                </div>
+                <button class="api-btn" id="rooms-by-price-btn">Найти комнаты</button>
+            </div>
+            
+            <div class="api-section">
+                <h3>Обновление статуса комнаты</h3>
+                <div class="form-group">
+                    <label for="status-room-id">ID комнаты:</label>
+                    <input type="number" id="status-room-id">
+                </div>
+                <div class="form-group">
+                    <label for="room-status">Новый статус:</label>
+                    <select id="room-status">
+                        <option value="AVAILABLE">Доступна</option>
+                        <option value="OCCUPIED">Занята</option>
+                        <option value="MAINTENANCE">На обслуживании</option>
+                    </select>
+                </div>
+                <button class="api-btn" id="update-room-status-btn">Обновить статус</button>
+            </div>
+            
+            <div class="api-section">
+                <h3>Обновление цены комнаты</h3>
+                <div class="form-group">
+                    <label for="price-room-id">ID комнаты:</label>
+                    <input type="number" id="price-room-id">
+                </div>
+                <div class="form-group">
+                    <label for="room-price">Новая цена:</label>
+                    <input type="number" id="room-price">
+                </div>
+                <button class="api-btn" id="update-room-price-btn">Обновить цену</button>
+            </div>
+        </div>
+        
+        <!-- Вкладка управления гостями -->
+        <div id="guests-tab" class="tab-content">
+            <h2>Управление гостями</h2>
+            
+            <div class="api-section">
+                <h3>Заселение гостя</h3>
+                <div class="form-group">
+                    <label for="first-name">Имя:</label>
+                    <input type="text" id="first-name" placeholder="Иван">
+                </div>
+                <div class="form-group">
+                    <label for="last-name">Фамилия:</label>
+                    <input type="text" id="last-name" placeholder="Иванов">
+                </div>
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" placeholder="ivan@example.com">
+                </div>
+                <div class="form-group">
+                    <label for="phone">Телефон:</label>
+                    <input type="text" id="phone" placeholder="+79991234567">
+                </div>
+                <div class="form-group">
+                    <label for="checkin-room-number">Номер комнаты:</label>
+                    <input type="text" id="checkin-room-number" placeholder="101">
+                </div>
+                <div class="form-group">
+                    <label for="check-out-date">Дата выезда:</label>
+                    <input type="date" id="check-out-date">
+                </div>
+                <button class="api-btn" id="check-in-btn">Заселить гостя</button>
+            </div>
+            
+            <div class="api-section">
+                <h3>Выселение гостя</h3>
+                <div class="form-group">
+                    <label for="checkout-guest-id">ID гостя:</label>
+                    <input type="number" id="checkout-guest-id">
+                </div>
+                <button class="api-btn" id="check-out-btn">Выселить гостя</button>
+            </div>
+            
+            <div class="api-section">
+                <h3>Продление проживания</h3>
+                <div class="form-group">
+                    <label for="extend-guest-id">ID гостя:</label>
+                    <input type="number" id="extend-guest-id">
+                </div>
+                <div class="form-group">
+                    <label for="new-checkout-date">Новая дата выезда:</label>
+                    <input type="date" id="new-checkout-date">
+                </div>
+                <button class="api-btn" id="extend-stay-btn">Продлить проживание</button>
+            </div>
+            
+            <div class="api-section">
+                <h3>Поиск гостя</h3>
+                <div class="form-group">
+                    <label for="guest-id">ID гостя:</label>
+                    <input type="number" id="guest-id" placeholder="1">
+                </div>
+                <button class="api-btn" id="get-guest-btn">Найти гостя</button>
+            </div>
+            
+            <div class="api-section">
+                <h3>Поиск гостей по фамилии</h3>
+                <div class="form-group">
+                    <label for="guest-lastname">Фамилия:</label>
+                    <input type="text" id="guest-lastname" placeholder="Иванов">
+                </div>
+                <button class="api-btn" id="search-guests-btn">Найти гостей</button>
+            </div>
+            
+            <div class="api-section">
+                <h3>Гости по комнате</h3>
+                <div class="form-group">
+                    <label for="guests-room-number">Номер комнаты:</label>
+                    <input type="text" id="guests-room-number" placeholder="101">
+                </div>
+                <button class="api-btn" id="guests-by-room-btn">Найти гостей</button>
+            </div>
+        </div>
+        
+        <!-- Вкладка журнала -->
+        <div id="logs-tab" class="tab-content">
+            <h2>Журнал операций</h2>
+            
+            <div class="active-subscriptions">
+                <h3>Активные подписки</h3>
+                <div id="subscription-list" class="subscription-list">
+                    <div class="subscription-item">Нет активных подписок</div>
+                </div>
+            </div>
+            
+            <div id="logs"></div>
+            <button id="clear-logs-btn">Очистить журнал</button>
+        </div>
+    </div>
+    
+    <script>
+        let stompClient = null;
+        let userId = null;
+        let subscriptions = {};
+        
+        // Инициализация страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            // Устанавливаем текущую дату + 7 дней для полей выезда по умолчанию
+            let defaultDate = new Date();
+            defaultDate.setDate(defaultDate.getDate() + 7);
+            let dateString = defaultDate.toISOString().split('T')[0];
+            
+            document.getElementById('check-out-date').value = dateString;
+            document.getElementById('new-checkout-date').value = dateString;
+            
+            // Обработчик вкладок
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    let tabId = this.getAttribute('data-tab');
+                    
+                    // Переключение вкладок
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Переключение контента
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    document.getElementById(tabId + '-tab').classList.add('active');
+                });
+            });
+            
+            // Обработчики подключения/отключения
+            document.getElementById('connect-btn').addEventListener('click', connect);
+            document.getElementById('disconnect-btn').addEventListener('click', disconnect);
+            
+            // Обработчик общих API кнопок
+            document.querySelectorAll('.api-btn[data-send]').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    let sendPath = this.getAttribute('data-send');
+                    let subscribePath = this.getAttribute('data-subscribe');
+                    
+                    if (subscribePath && !subscriptions[subscribePath]) {
+                        subscribe(subscribePath);
+                    }
+                    
+                    sendEmptyMessage(sendPath);
+                });
+            });
+            
+            // Обработчики специфичных API кнопок
+            setupSpecificApiHandlers();
+            
+            // Очистка журнала
+            document.getElementById('clear-logs-btn').addEventListener('click', function() {
+                document.getElementById('logs').innerHTML = '';
+            });
+        });
+        
+        function connect() {
+            const endpoint = document.getElementById('endpoint-select').value;
+            userId = document.getElementById('user-id').value;
+            
+            if (!userId.trim()) {
+                log("Ошибка: ID пользователя не может быть пустым", "error");
+                return;
+            }
+            
+            const socket = new SockJS(endpoint);
+            stompClient = Stomp.over(socket);
+            
+            // Отключаем логирование STOMP в консоль
+            stompClient.debug = null;
+            
+            log("Подключение к " + endpoint + "...", "info");
+            
+            stompClient.connect({}, 
+                function(frame) {
+                    // Успешное подключение
+                    updateConnectionStatus(true);
+                    log("Подключено: " + frame, "info");
+                    
+                    // Подписываемся на канал ошибок
+                    subscribe('/user/queue/error');
+                    
+                    document.getElementById('connect-btn').disabled = true;
+                    document.getElementById('disconnect-btn').disabled = false;
+                    
+                    // Активируем API кнопки
+                    document.querySelectorAll('.api-btn').forEach(btn => btn.disabled = false);
+                },
+                function(error) {
+                    // Ошибка подключения
+                    log("Ошибка подключения: " + error, "error");
+                    updateConnectionStatus(false);
+                    disconnect();
+                }
+            );
+        }
+        
+        function disconnect() {
+            if (stompClient !== null) {
+                // Отписываемся от всех каналов
+                for (let topic in subscriptions) {
+                    if (subscriptions[topic]) {
+                        subscriptions[topic].unsubscribe();
+                    }
+                }
+                subscriptions = {};
+                updateSubscriptionList();
+                
+                stompClient.disconnect();
+                stompClient = null;
+            }
+            
+            updateConnectionStatus(false);
+            document.getElementById('connect-btn').disabled = false;
+            document.getElementById('disconnect-btn').disabled = true;
+            
+            // Деактивируем API кнопки
+            document.querySelectorAll('.api-btn').forEach(btn => btn.disabled = true);
+        }
+        
+        function subscribe(topic) {
+            if (stompClient && stompClient.connected) {
+                if (subscriptions[topic]) {
+                    log("Уже подписаны на " + topic, "info");
+                    return;
+                }
+                
+                subscriptions[topic] = stompClient.subscribe(topic, function(message) {
+                    try {
+                        let body = JSON.parse(message.body);
+                        let json = JSON.stringify(body, null, 2);
+                        log("Получено от " + topic + ":\n" + json, "received");
+                    } catch (e) {
+                        log("Получено от " + topic + ": " + message.body, "received");
+                    }
+                });
+                
+                log("Подписка на " + topic + " выполнена", "subscription");
+                updateSubscriptionList();
+            } else {
+                log("Нельзя подписаться: соединение не установлено", "error");
+            }
+        }
+        
+        function unsubscribe(topic) {
+            if (subscriptions[topic]) {
+                subscriptions[topic].unsubscribe();
+                delete subscriptions[topic];
+                log("Отписка от " + topic + " выполнена", "subscription");
+                updateSubscriptionList();
+            }
+        }
+        
+        function sendEmptyMessage(destination) {
+            if (stompClient && stompClient.connected) {
+                stompClient.send(destination, {}, "{}");
+                log("Отправлен запрос на " + destination, "sent");
+            } else {
+                log("Нельзя отправить: соединение не установлено", "error");
+            }
+        }
+        
+        function sendJsonMessage(destination, message) {
+            if (stompClient && stompClient.connected) {
+                try {
+                    // Если передана строка, проверяем, что это корректный JSON
+                    if (typeof message === 'string') {
+                        JSON.parse(message);
+                    }
+                    
+                    // Преобразуем объект в строку
+                    const jsonStr = typeof message === 'string' ? message : JSON.stringify(message);
+                    
+                    stompClient.send(destination, {}, jsonStr);
+                    log("Отправлено на " + destination + ":\n" + JSON.stringify(message, null, 2), "sent");
+                } catch (e) {
+                    log("Ошибка формата JSON: " + e.message, "error");
+                }
+            } else {
+                log("Нельзя отправить: соединение не установлено", "error");
+            }
+        }
+        
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connection-status');
+            if (connected) {
+                statusElement.className = "connection-status connected";
+                statusElement.textContent = "Статус: Подключено";
+            } else {
+                statusElement.className = "connection-status disconnected";
+                statusElement.textContent = "Статус: Не подключено";
+            }
+        }
+        
+        function updateSubscriptionList() {
+            const listElement = document.getElementById('subscription-list');
+            const topics = Object.keys(subscriptions);
+            
+            if (topics.length === 0) {
+                listElement.innerHTML = '<div class="subscription-item">Нет активных подписок</div>';
+            } else {
+                listElement.innerHTML = '';
+                topics.forEach(topic => {
+                    const item = document.createElement('div');
+                    item.className = 'subscription-item';
+                    
+                    const topicSpan = document.createElement('span');
+                    topicSpan.textContent = topic;
+                    
+                    const unsubBtn = document.createElement('button');
+                    unsubBtn.textContent = 'Отписаться';
+                    unsubBtn.style.marginLeft = '10px';
+                    unsubBtn.addEventListener('click', () => unsubscribe(topic));
+                    
+                    item.appendChild(topicSpan);
+                    item.appendChild(unsubBtn);
+                    listElement.appendChild(item);
+                });
+            }
+        }
+        
+        function log(message, type) {
+            const logsContainer = document.getElementById('logs');
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry ' + (type || 'info');
+            
+            const timestamp = new Date().toLocaleTimeString();
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            
+            logsContainer.appendChild(logEntry);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+        
+        function setupSpecificApiHandlers() {
+            // Поиск комнаты
+            document.getElementById('search-room-btn').addEventListener('click', function() {
+                const roomNumber = document.getElementById('room-number-search').value;
+                
+                if (!roomNumber) {
+                    log("Введите номер комнаты", "error");
+                    return;
+                }
+                
+                const topic = '/user/queue/room';
+                if (!subscriptions[topic]) {
+                    subscribe(topic);
+                }
+                
+                sendJsonMessage('/app/room/search', {
+                    roomNumber: roomNumber,
+                    requesterId: userId
+                });
+            });
+            
+            // Комнаты по типу
+            document.getElementById('rooms-by-type-btn').addEventListener('click', function() {
+                const roomType = document.getElementById('room-type').value;
+                
+                const topic = '/user/queue/rooms-by-type';
+                if (!subscriptions[topic]) {
+                    subscribe(topic);
+                }
+                
+                sendJsonMessage('/app/rooms/by-type', {
+                    type: roomType,
+                    requesterId: userId
+                });
+            });
+            
+            // Комнаты по ценовому диапазону
+            document.getElementById('rooms-by-price-btn').addEventListener('click', function() {
+                const minPrice = document.getElementById('min-price').value;
+                const maxPrice = document.getElementById('max-price').value;
+                
+                if (!minPrice || !maxPrice) {
+                    log("Введите минимальную и максимальную цену", "error");
+                    return;
+                }
+                
+                const topic = '/user/queue/rooms-by-price';
+                if (!subscriptions[topic]) {
+                    subscribe(topic);
+                }
+                
+                sendJsonMessage('/app/rooms/by-price-range', {
+                    minPrice: Number(minPrice),
+                    maxPrice: Number(maxPrice),
+                    requesterId: userId
+                });
+            });
+            
+            // Обновление статуса комнаты
+            document.getElementById('update-room-status-btn').addEventListener('click', function() {
+                const roomId = document.getElementById('status-room-id').value;
+                const status = document.getElementById('room-status').value;
+                
+                if (!roomId) {
+                    log("Введите ID комнаты", "error");
+                    return;
+                }
+                
+                const topic1 = '/topic/room-updated';
+                const topic2 = '/user/queue/room-update-result';
+                
+                if (!subscriptions[topic1]) {
+                    subscribe(topic1);
+                }
+                
+                if (!subscriptions[topic2]) {
+                    subscribe(topic2);
+                }
+                
+                sendJsonMessage('/app/room/update-status', {
+                    roomId: Number(roomId),
+                    status: status,
+                    requesterId: userId
+                });
+            });
+            
+            // Обновление цены комнаты
+            document.getElementById('update-room-price-btn').addEventListener('click', function() {
+                const roomId = document.getElementById('price-room-id').value;
+                const price = document.getElementById('room-price').value;
+                
+                if (!roomId || !price) {
+                    log("Введите ID комнаты и новую цену", "error");
+                    return;
+                }
+                
+                const topic1 = '/topic/room-price-updated';
+                const topic2 = '/user/queue/room-update-result';
+                
+                if (!subscriptions[topic1]) {
+                    subscribe(topic1);
+                }
+                
+                if (!subscriptions[topic2]) {
+                    subscribe(topic2);
+                }
+                
+                sendJsonMessage('/app/room/update-price', {
+                    roomId: Number(roomId),
+                    price: Number(price),
+                    requesterId: userId
+                });
+            });
+            
+            // Заселение гостя
+            document.getElementById('check-in-btn').addEventListener('click', function() {
+                const firstName = document.getElementById('first-name').value;
+                const lastName = document.getElementById('last-name').value;
+                const email = document.getElementById('email').value;
+                const phone = document.getElementById('phone').value;
+                const roomNumber = document.getElementById('checkin-room-number').value;
+                const checkOutDate = document.getElementById('check-out-date').value;
+                
+                if (!firstName || !lastName || !email || !phone || !roomNumber) {
+                    log("Заполните все обязательные поля", "error");
+                    return;
+                }
+                
+                const topic1 = '/topic/guest-checked-in';
+                const topic2 = '/user/queue/check-in-result';
+                
+                if (!subscriptions[topic1]) {
+                    subscribe(topic1);
+                }
+                
+                if (!subscriptions[topic2]) {
+                    subscribe(topic2);
+                }
+                
+                sendJsonMessage('/app/guest/check-in', {
+                    firstName: firstName,
+                    lastName: lastName,
+                    email: email,
+                    phone: phone,
+                    roomNumber: roomNumber,
+                    checkOutDate: checkOutDate,
+                    requesterId: userId
+                });
+            });
+            
+            // Выселение гостя
+            document.getElementById('check-out-btn').addEventListener('click', function() {
+                const guestId = document.getElementById('checkout-guest-id').value;
+                
+                if (!guestId) {
+                    log("Введите ID гостя", "error");
+                    return;
+                }
+                
+                const topic1 = '/topic/guest-checked-out';
+                const topic2 = '/user/queue/check-out-result';
+                
+                if (!subscriptions[topic1]) {
+                    subscribe(topic1);
+                }
+                
+                if (!subscriptions[topic2]) {
+                    subscribe(topic2);
+                }
+                
+                sendJsonMessage('/app/guest/check-out', {
+                    guestId: Number(guestId),
+                    requesterId: userId
+                });
+            });
+            
+            // Продление проживания
+            document.getElementById('extend-stay-btn').addEventListener('click', function() {
+                const guestId = document.getElementById('extend-guest-id').value;
+                const newCheckOutDate = document.getElementById('new-checkout-date').value;
+                
+                if (!guestId || !newCheckOutDate) {
+                    log("Введите ID гостя и новую дату выезда", "error");
+                    return;
+                }
+                
+                const topic1 = '/topic/guest-stay-extended';
+                const topic2 = '/user/queue/extend-stay-result';
+                
+                if (!subscriptions[topic1]) {
+                    subscribe(topic1);
+                }
+                
+                if (!subscriptions[topic2]) {
+                    subscribe(topic2);
+                }
+                
+                sendJsonMessage('/app/guest/extend-stay', {
+                    guestId: Number(guestId),
+                    newCheckOutDate: newCheckOutDate,
+                    requesterId: userId
+                });
+            });
+            
+            // Поиск гостя по ID
+            document.getElementById('get-guest-btn').addEventListener('click', function() {
+                const guestId = document.getElementById('guest-id').value;
+                
+                if (!guestId) {
+                    log("Введите ID гостя", "error");
+                    return;
+                }
+                
+                const topic = '/user/queue/guest';
+                if (!subscriptions[topic]) {
+                    subscribe(topic);
+                }
+                
+                sendJsonMessage('/app/guest', {
+                    id: Number(guestId),
+                    requesterId: userId
+                });
+            });
+            
+            // Поиск гостей по фамилии
+            document.getElementById('search-guests-btn').addEventListener('click', function() {
+                const lastName = document.getElementById('guest-lastname').value;
+                
+                if (!lastName) {
+                    log("Введите фамилию", "error");
+                    return;
+                }
+                
+                const topic = '/user/queue/guests';
+                if (!subscriptions[topic]) {
+                    subscribe(topic);
+                }
+                
+                sendJsonMessage('/app/guests/search', {
+                    lastName: lastName,
+                    requesterId: userId
+                });
+            });
+            
+            // Поиск гостей по комнате
+            document.getElementById('guests-by-room-btn').addEventListener('click', function() {
+                const roomNumber = document.getElementById('guests-room-number').value;
+                
+                if (!roomNumber) {
+                    log("Введите номер комнаты", "error");
+                    return;
+                }
+                
+                const topic = '/user/queue/guests-by-room';
+                if (!subscriptions[topic]) {
+                    subscribe(topic);
+                }
+                
+                sendJsonMessage('/app/guests/by-room', {
+                    roomNumber: roomNumber,
+                    requesterId: userId
+                });
+            });
+        }
+    </script>
+</body>
+</html> 
