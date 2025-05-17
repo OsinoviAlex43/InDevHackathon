@@ -81,26 +81,32 @@ export class RoomStore {
   handleRoomUpdate = (roomData: RoomWithSensors) => {
     console.log('Updating room:', roomData);
     runInAction(() => {
-      const roomIndex = this.rooms.findIndex(room => room.id === roomData.id);
+      // Если это обновление выбранной комнаты, обновляем её и снимаем флаг загрузки
+      if (this.selectedRoom && String(this.selectedRoom.id) === String(roomData.id)) {
+        console.log('Updating selected room with data:', roomData);
+        this.selectedRoom = { ...this.selectedRoom, ...roomData };
+        this.isLoading = false;
+      }
+      
+      const roomIndex = this.rooms.findIndex(room => String(room.id) === String(roomData.id));
       if (roomIndex >= 0) {
         // Update existing room with new data
         this.rooms[roomIndex] = { ...this.rooms[roomIndex], ...roomData };
         
         // Also update in favorites if present
-        const favoriteIndex = this.favoriteRooms.findIndex(room => room.id === roomData.id);
+        const favoriteIndex = this.favoriteRooms.findIndex(room => String(room.id) === String(roomData.id));
         if (favoriteIndex >= 0) {
           this.favoriteRooms[favoriteIndex] = { ...this.favoriteRooms[favoriteIndex], ...roomData };
           this.saveFavoritesToStorage();
         }
         
-        // Update selected room if it's the one being updated
-        if (this.selectedRoom && this.selectedRoom.id === roomData.id) {
-          this.selectedRoom = { ...this.selectedRoom, ...roomData };
-        }
-        
+        this.applyFiltersAndSort();
+      } else {
+        // Если комната не найдена в списке комнат, добавляем её
+        this.rooms.push(roomData);
         this.applyFiltersAndSort();
       }
-      });
+    });
   }
   
   handleNewRoom = (roomData: RoomWithSensors) => {
@@ -217,9 +223,18 @@ export class RoomStore {
     this.saveFavoritesToStorage();
   };
 
-  updateRoom = (roomId: string, status: string) => {
-    console.log(`Updating room ${roomId} with status: ${status}`);
-    networkAPI.updateRoom(roomId, status);
+  updateRoom = (roomId: string, statusOrUpdates: string | Partial<Room>) => {
+    console.log(`Updating room ${roomId} with:`, statusOrUpdates);
+    if (typeof statusOrUpdates === 'string') {
+      // Just updating status
+      networkAPI.updateRoom(roomId, statusOrUpdates);
+    } else {
+      // Updating with object
+      networkAPI.sendMessage('update_room', {
+        id: roomId,
+        ...statusOrUpdates
+      });
+    }
   }
   
   deleteRoom = (roomId: string) => {
@@ -231,8 +246,22 @@ export class RoomStore {
     console.log('Toggling door lock for room:', roomId);
     const room = this.rooms.find(r => r.id === roomId);
     if (room) {
-      const newStatus = room.doorLocked ? 'unlocked' : 'locked';
-      this.updateRoom(roomId, newStatus);
+      const newStatus = room.status === 'locked' ? 'unlocked' : 'locked';
+      // Update the room status with the new door lock status
+      networkAPI.updateRoom(roomId, newStatus);
+      
+      // Also send HTTP request to the mock server for door control
+      if (newStatus === 'unlocked') {
+        networkAPI.openDoor();
+      } else {
+        networkAPI.closeDoor();
+      }
+      
+      // Also update local state for immediate feedback
+      runInAction(() => {
+        room.status = newStatus;
+        room.doorLocked = newStatus === 'locked';
+      });
     }
   }
   
@@ -240,12 +269,23 @@ export class RoomStore {
     console.log(`Toggling ${light} light for room:`, roomId);
     const room = this.rooms.find(r => r.id === roomId);
     if (room && room.sensors) {
-      // This functionality would need to be updated to match the actual server API
-      // For now, we'll just update the local state
+      // Get new value (toggled)
       const newValue = !room.sensors.lights[light];
+      
+      // Update local state
       runInAction(() => {
         room.sensors.lights[light] = newValue;
       });
+      
+      // Send update to the server
+      networkAPI.updateRoomLight(roomId, light, newValue);
+      
+      // Also send HTTP request to the mock server for light control
+      if (newValue) {
+        networkAPI.turnLightOn();
+      } else {
+        networkAPI.turnLightOff();
+      }
     }
   }
 
@@ -253,11 +293,13 @@ export class RoomStore {
     console.log(`Updating ${type} sensor for room ${roomId} to ${value}`);
     const room = this.rooms.find(r => r.id === roomId);
     if (room && room.sensors) {
-      // This functionality would need to be updated to match the actual server API
-      // For now, we'll just update the local state
+      // Update local state
       runInAction(() => {
         room.sensors[type] = value;
       });
+      
+      // Send update to the server
+      networkAPI.updateRoomSensor(roomId, type, value);
     }
   }
 
@@ -383,9 +425,11 @@ export class RoomStore {
   loadRoomById = (roomId: string, notFoundCallback?: () => void) => {
     console.log('Loading room by ID:', roomId);
     
-    const room = this.rooms.find(r => r.id === roomId);
+    // First try to find the room in the already loaded rooms
+    const room = this.rooms.find(r => String(r.id) === String(roomId));
     
     if (room) {
+      console.log('Room found locally:', room);
       this.selectedRoom = room;
       this.isLoading = false;
       return;
@@ -393,23 +437,25 @@ export class RoomStore {
     
     // Room not found locally, request it from the server
     this.isLoading = true;
+    console.log('Room not found locally, requesting from server');
     
     // Create a timeout to handle the case where the room doesn't exist
     const timeout = setTimeout(() => {
       if (this.isLoading) {
         this.isLoading = false;
+        console.error(`Room with ID ${roomId} not found after timeout`);
         if (notFoundCallback) {
           notFoundCallback();
         }
       }
-    }, 3000);
+    }, 5000);
     
-    // In this implementation, we don't have a direct API call to load a single room
-    // So we'll just request all rooms and then find the one we want
-    networkAPI.requestRooms();
+    // Use the requestRoom method to get a specific room by ID
+    // Pass the ID as a string to the API
+    networkAPI.requestRoom(String(roomId));
     
-    // Cancel the timeout if we get a response
-    clearTimeout(timeout);
+    // We'll rely on the handleRoomUpdate callback to update the selectedRoom
+    // when the response comes back, which will also clear the loading state
   };
   
   resetRoomDetails = () => {

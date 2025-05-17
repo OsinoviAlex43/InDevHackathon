@@ -21,6 +21,7 @@ import { observer } from 'mobx-react-lite';
 import type { RoomWithSensors } from '../../types/RoomTypes';
 import rootStore from '../../stores';
 import { motion } from 'framer-motion';
+import networkAPI from '../../services/NetworkAPI';
 
 interface RoomControlsProps {
   room: RoomWithSensors;
@@ -141,7 +142,15 @@ export const RoomControls = observer(({ room }: RoomControlsProps) => {
                 variant={room.doorLocked ? "contained" : "contained"}
                 color={room.doorLocked ? "primary" : "error"}
                 startIcon={room.doorLocked ? <UnlockIcon /> : <LockIcon />}
-                onClick={() => roomStore.toggleDoorLock(room.id)}
+                onClick={() => {
+                  roomStore.toggleDoorLock(room.id);
+                  // Also directly call the door control API on the mock server
+                  if (room.doorLocked) {
+                    networkAPI.openDoor();
+                  } else {
+                    networkAPI.closeDoor();
+                  }
+                }}
                 sx={{ 
                   borderRadius: 2,
                   px: 3,
@@ -234,7 +243,15 @@ export const RoomControls = observer(({ room }: RoomControlsProps) => {
                     
                     <Tooltip title={isOn ? "Turn off" : "Turn on"}>
                       <IconButton
-                        onClick={() => roomStore.toggleLight(room.id, light as 'bathroom' | 'bedroom' | 'hallway')}
+                        onClick={() => {
+                          roomStore.toggleLight(room.id, light as 'bathroom' | 'bedroom' | 'hallway');
+                          // Also directly call the light control API on the mock server
+                          if (isOn) {
+                            networkAPI.turnLightOff();
+                          } else {
+                            networkAPI.turnLightOn();
+                          }
+                        }}
                         color={isOn ? "warning" : "default"}
                         sx={{ 
                           width: '80px',

@@ -48,7 +48,9 @@ const statusChipColors: Record<RoomStatus, { color: 'default' | 'primary' | 'sec
   'free': { color: 'success', label: 'Free' },
   'service': { color: 'warning', label: 'Service' },
   'cleaning': { color: 'info', label: 'Cleaning' },
-  'booked': { color: 'primary', label: 'Booked' }
+  'booked': { color: 'primary', label: 'Booked' },
+  'locked': { color: 'error', label: 'Locked' },
+  'unlocked': { color: 'success', label: 'Unlocked' }
 };
 
 const RoomDetailsPage = observer(() => {
@@ -60,8 +62,7 @@ const RoomDetailsPage = observer(() => {
   // Get room by ID on component mount
   useEffect(() => {
     if (id) {
-      const roomId = BigInt(id);
-      roomStore.loadRoomById(roomId, () => navigate('/rooms'));
+      roomStore.loadRoomById(id, () => navigate('/rooms'));
     }
     
     // Cleanup on unmount
@@ -200,8 +201,8 @@ const RoomDetailsPage = observer(() => {
             Room {room.room_number}
           </Typography>
           <Chip 
-            label={statusChipColors[room.status].label} 
-            color={statusChipColors[room.status].color} 
+            label={statusChipColors[room.status]?.label || room.status} 
+            color={statusChipColors[room.status]?.color || 'default'} 
               sx={{ 
                 ml: 2, 
                 height: '28px',

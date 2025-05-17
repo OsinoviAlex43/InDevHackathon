@@ -1,5 +1,5 @@
 export type RoomType = 'standart' | 'deluxe' | 'suite';
-export type RoomStatus = 'free' | 'occupied' | 'service' | 'cleaning' | 'booked';
+export type RoomStatus = 'free' | 'occupied' | 'service' | 'cleaning' | 'booked' | 'locked' | 'unlocked';
 
 export interface RoomSensors {
     temperature: number;

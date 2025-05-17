@@ -1,0 +1,27 @@
+{
+  "name": "hotel-management-system",
+  "version": "1.0.0",
+  "description": "Hotel Management System with WebSocket and React",
+  "main": "index.js",
+  "scripts": {
+    "start:backend": "cd backend/node && node server.js",
+    "start:frontend": "cd frontend/web && npm start",
+    "dev:backend": "cd backend/node && nodemon server.js",
+    "dev:frontend": "cd frontend/web && npm run dev",
+    "init-db": "cd backend/node && node database/init-db.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "hotel",
+    "websocket",
+    "postgresql",
+    "node",
+    "react"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0"
+  }
+}

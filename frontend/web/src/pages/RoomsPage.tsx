@@ -270,7 +270,7 @@ const RoomsPage: React.FC = observer(() => {
       
       <Paper sx={{ p: 2, mb: 3 }}>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} md={6}>
+          <Grid xs={12} md={6}>
             <TextField
               fullWidth
               label="Search Rooms"
@@ -288,7 +288,7 @@ const RoomsPage: React.FC = observer(() => {
             />
           </Grid>
           
-          <Grid item xs={6} md={3}>
+          <Grid xs={6} md={3}>
             <Button
               fullWidth
               variant="outlined"
@@ -301,7 +301,7 @@ const RoomsPage: React.FC = observer(() => {
             </Button>
           </Grid>
           
-          <Grid item xs={6} md={3}>
+          <Grid xs={6} md={3}>
             <Button
               fullWidth
               variant="outlined"
@@ -340,7 +340,7 @@ const RoomsPage: React.FC = observer(() => {
       ) : (
         <Grid container spacing={3}>
           {filteredRooms.map(room => (
-            <Grid item key={room.id.toString()} xs={12} sm={6} md={4} lg={3}>
+            <Grid key={room.id.toString()} xs={12} md={4} lg={3}>
               <RoomCard
                 room={room}
                 isFavorite={roomStore.favoriteRooms.some(r => r.id === room.id)}
@@ -355,7 +355,7 @@ const RoomsPage: React.FC = observer(() => {
         <DialogTitle>Filter Rooms</DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={2}>
-            <Grid item xs={12}>
+            <Grid xs={12}>
               <FormControl fullWidth>
                 <InputLabel id="status-filter-label" sx={{ background: 'white', px: 1 }}>Room Status</InputLabel>
                 <Select
@@ -383,7 +383,7 @@ const RoomsPage: React.FC = observer(() => {
               </FormControl>
             </Grid>
             
-            <Grid item xs={12}>
+            <Grid xs={12}>
               <FormControl fullWidth>
                 <InputLabel id="type-filter-label" sx={{ background: 'white', px: 1 }}>Room Type</InputLabel>
                 <Select
@@ -411,7 +411,7 @@ const RoomsPage: React.FC = observer(() => {
               </FormControl>
             </Grid>
             
-            <Grid item xs={6}>
+            <Grid xs={6}>
               <Typography variant="subtitle2" gutterBottom>
                 Min Price
               </Typography>
@@ -428,7 +428,7 @@ const RoomsPage: React.FC = observer(() => {
               />
             </Grid>
             
-            <Grid item xs={6}>
+            <Grid xs={6}>
               <Typography variant="subtitle2" gutterBottom>
                 Max Price
               </Typography>

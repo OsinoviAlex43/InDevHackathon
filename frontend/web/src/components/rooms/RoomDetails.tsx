@@ -31,7 +31,7 @@ const ROOM_STATUSES: { value: RoomStatus; label: string }[] = [
 const ROOM_TYPES: { value: RoomType; label: string }[] = [
   { value: 'standart', label: 'Standard' },
   { value: 'deluxe', label: 'Deluxe' },
-  { value: 'suit', label: 'Suite' }
+  { value: 'suite', label: 'Suite' }
 ];
 
 const statusChipColors: Record<RoomStatus, { color: 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning', label: string }> = {
@@ -39,7 +39,9 @@ const statusChipColors: Record<RoomStatus, { color: 'default' | 'primary' | 'sec
   'free': { color: 'success', label: 'Free' },
   'service': { color: 'warning', label: 'Service' },
   'cleaning': { color: 'info', label: 'Cleaning' },
-  'booked': { color: 'primary', label: 'Booked' }
+  'booked': { color: 'primary', label: 'Booked' },
+  'locked': { color: 'error', label: 'Locked' },
+  'unlocked': { color: 'success', label: 'Unlocked' }
 };
 
 interface RoomDetailsProps {
@@ -314,8 +316,8 @@ export const RoomDetails = observer(({ room, transitionDuration }: RoomDetailsPr
                   Status
                 </Typography>
                 <Chip 
-                  label={statusChipColors[room.status].label} 
-                  color={statusChipColors[room.status].color} 
+                  label={statusChipColors[room.status]?.label || room.status} 
+                  color={statusChipColors[room.status]?.color || 'default'} 
                   size="medium"
                   sx={{
                     height: 32,

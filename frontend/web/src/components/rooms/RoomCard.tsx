@@ -46,6 +46,7 @@ import { motion } from 'framer-motion';
 
 import type {RoomWithSensors, RoomStatus, RoomType} from '../../types/RoomTypes';
 import rootStore from '../../stores';
+import networkAPI from '../../services/NetworkAPI';
 
 interface RoomCardProps {
   room: RoomWithSensors;
@@ -58,21 +59,23 @@ const statusColors: Record<RoomStatus, { color: 'primary' | 'secondary' | 'error
   'free': { color: 'success', label: 'Free' },
   'service': { color: 'warning', label: 'Service' },
   'cleaning': { color: 'info', label: 'Cleaning' },
-  'booked': { color: 'primary', label: 'Booked' }
+  'booked': { color: 'primary', label: 'Booked' },
+  'locked': { color: 'error', label: 'Locked' },
+  'unlocked': { color: 'success', label: 'Unlocked' }
 };
 
 // Room type icons
 const roomTypeIcons: Record<RoomType, React.ReactNode> = {
   'standart': <BedIcon />,
   'deluxe': <BedIcon sx={{ transform: 'scale(1.2)' }} />,
-  'suit': <BedIcon sx={{ transform: 'scale(1.5)' }} />
+  'suite': <BedIcon sx={{ transform: 'scale(1.5)' }} />
 };
 
 // Mock room images for different room types
 const roomImages: Record<RoomType, string> = {
   'standart': 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?q=80&w=400&h=200&auto=format&fit=crop',
   'deluxe': 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=400&h=200&auto=format&fit=crop',
-  'suit': 'https://images.unsplash.com/photo-1566665797739-1674de7a421a?q=80&w=400&h=200&auto=format&fit=crop'
+  'suite': 'https://images.unsplash.com/photo-1566665797739-1674de7a421a?q=80&w=400&h=200&auto=format&fit=crop'
 };
 
 // Drag container to wrap our card
@@ -103,6 +106,13 @@ const RoomCard: React.FC<RoomCardProps> = observer(({ room, isFavorite = false }
   const handleToggleDoor = (e: React.MouseEvent) => {
     e.stopPropagation();
     roomStore.toggleDoorLock(room.id);
+    
+    // Also send HTTP request to the mock server for door control
+    if (room.doorLocked) {
+      networkAPI.openDoor();
+    } else {
+      networkAPI.closeDoor();
+    }
   };
   
   const handleToggleExpanded = (e: React.MouseEvent) => {
@@ -135,6 +145,12 @@ const RoomCard: React.FC<RoomCardProps> = observer(({ room, isFavorite = false }
     const value = newValue as number;
     setPressureValue(value);
     roomStore.updateSensor(room.id, 'pressure', value);
+  };
+  
+  // Handle light toggle
+  const handleToggleLight = (e: React.MouseEvent, light: 'bathroom' | 'bedroom' | 'hallway') => {
+    e.stopPropagation();
+    roomStore.toggleLight(room.id, light);
   };
   
   // Format price with currency
@@ -505,7 +521,10 @@ const RoomCard: React.FC<RoomCardProps> = observer(({ room, isFavorite = false }
               </Typography>
               <Box sx={{ display: 'flex', mt: 0.5, justifyContent: 'space-around' }}>
                 <Tooltip title="Bathroom Light">
-                  <Box sx={{ textAlign: 'center' }}>
+                  <Box 
+                    sx={{ textAlign: 'center', cursor: 'pointer' }}
+                    onClick={(e) => handleToggleLight(e, 'bathroom')}
+                  >
                     {sensors.lights.bathroom ? 
                       <LightOnIcon
                         color="warning"
@@ -520,7 +539,10 @@ const RoomCard: React.FC<RoomCardProps> = observer(({ room, isFavorite = false }
                 </Tooltip>
                 
                 <Tooltip title="Bedroom Light">
-                  <Box sx={{ textAlign: 'center' }}>
+                  <Box 
+                    sx={{ textAlign: 'center', cursor: 'pointer' }}
+                    onClick={(e) => handleToggleLight(e, 'bedroom')}
+                  >
                     {sensors.lights.bedroom ? 
                       <LightOnIcon
                         color="warning"
@@ -535,7 +557,10 @@ const RoomCard: React.FC<RoomCardProps> = observer(({ room, isFavorite = false }
                 </Tooltip>
                 
                 <Tooltip title="Hallway Light">
-                  <Box sx={{ textAlign: 'center' }}>
+                  <Box 
+                    sx={{ textAlign: 'center', cursor: 'pointer' }}
+                    onClick={(e) => handleToggleLight(e, 'hallway')}
+                  >
                     {sensors.lights.hallway ? 
                       <LightOnIcon
                         color="warning"
