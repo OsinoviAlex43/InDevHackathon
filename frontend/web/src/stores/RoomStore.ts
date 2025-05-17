@@ -2,125 +2,6 @@ import { makeAutoObservable, runInAction, toJS } from 'mobx';
 import type {Room, RoomFilters, RoomSortOptions, RoomWithSensors, RoomType, RoomStatus, RoomSensors} from '../types/RoomTypes';
 import networkAPI from '../services/NetworkAPI';
 
-// Mock data for demonstration and fallback
-const mockRooms: RoomWithSensors[] = [
-  {
-    id: BigInt(1),
-    room_number: '101',
-    room_type: 'standart',
-    status: 'occupied',
-    price_per_night: 100,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    sensors: {
-      lights: {
-        bathroom: true,
-        bedroom: false,
-        hallway: true
-      },
-      temperature: 22.5,
-      humidity: 45,
-      pressure: 1013
-    },
-    doorLocked: true,
-    guests: [],
-    max_guests: 2,
-    current_guests_count: 1
-  },
-  {
-    id: BigInt(2),
-    room_number: '102',
-    room_type: 'deluxe',
-    status: 'free',
-    price_per_night: 150,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    sensors: {
-      lights: {
-        bathroom: false,
-        bedroom: false,
-        hallway: false
-      },
-      temperature: 21,
-      humidity: 40,
-      pressure: 1013
-    },
-    doorLocked: true,
-    guests: [],
-    max_guests: 4,
-    current_guests_count: 0
-  },
-  {
-    id: BigInt(3),
-    room_number: '103',
-    room_type: 'suit',
-    status: 'cleaning',
-    price_per_night: 250,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    sensors: {
-      lights: {
-        bathroom: true,
-        bedroom: true,
-        hallway: true
-      },
-      temperature: 23,
-      humidity: 38,
-      pressure: 1014
-    },
-    doorLocked: false,
-    guests: [],
-    max_guests: 6,
-    current_guests_count: 0
-  },
-  {
-    id: BigInt(4),
-    room_number: '201',
-    room_type: 'standart',
-    status: 'booked',
-    price_per_night: 100,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    sensors: {
-      lights: {
-        bathroom: false,
-        bedroom: false,
-        hallway: false
-      },
-      temperature: 20,
-      humidity: 42,
-      pressure: 1012
-    },
-    doorLocked: true,
-    guests: [],
-    max_guests: 2,
-    current_guests_count: 0
-  },
-  {
-    id: BigInt(5),
-    room_number: '202',
-    room_type: 'deluxe',
-    status: 'service',
-    price_per_night: 150,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    sensors: {
-      lights: {
-        bathroom: true,
-        bedroom: false,
-        hallway: true
-      },
-      temperature: 24,
-      humidity: 39,
-      pressure: 1013
-    },
-    doorLocked: false,
-    guests: [],
-    max_guests: 4,
-    current_guests_count: 0
-  }
-];
-
 export class RoomStore {
   rooms: RoomWithSensors[] = [];
   filteredRooms: RoomWithSensors[] = [];
@@ -157,30 +38,19 @@ export class RoomStore {
       onRoomUpdate: this.handleRoomUpdate,
       onRoomAdded: this.handleNewRoom,
       onRoomDeleted: this.handleRoomDelete,
-      onError: this.loadMockData
+      onError: (message) => {
+        console.error('API Error:', message);
+      }
     });
     
     // Start connection
     networkAPI.connect();
-    
-    // Set fallback data if API fails
-    setTimeout(() => {
-      if (this.rooms.length === 0) {
-        console.log('Falling back to mock data');
-        this.loadMockData();
-      }
-    }, 5000);
   }
 
   // Save favorites to localStorage
   saveFavoritesToStorage = () => {
     try {
-      // Convert bigint to string for JSON storage
-      const serializedFavorites = this.favoriteRooms.map(room => ({
-        ...room,
-        id: room.id.toString()
-      }));
-      localStorage.setItem('favoriteRooms', JSON.stringify(serializedFavorites));
+      localStorage.setItem('favoriteRooms', JSON.stringify(this.favoriteRooms));
     } catch (error) {
       console.error('Failed to save favorites to localStorage:', error);
     }
@@ -191,26 +61,12 @@ export class RoomStore {
     try {
       const savedFavorites = localStorage.getItem('favoriteRooms');
       if (savedFavorites) {
-        const parsedFavorites = JSON.parse(savedFavorites);
-        // Convert string IDs back to bigint
-        this.favoriteRooms = parsedFavorites.map((room: any) => ({
-          ...room,
-          id: BigInt(room.id)
-        }));
+        this.favoriteRooms = JSON.parse(savedFavorites);
       }
     } catch (error) {
       console.error('Failed to load favorites from localStorage:', error);
       this.favoriteRooms = [];
     }
-  }
-
-  loadMockData = () => {
-    console.log('Loading mock room data');
-    runInAction(() => {
-      this.rooms = mockRooms;
-      this.applyFiltersAndSort();
-      this.isLoading = false;
-    });
   }
 
   handleInitialData = (rooms: RoomWithSensors[]) => {
@@ -256,25 +112,27 @@ export class RoomStore {
     });
   }
   
-  handleRoomDelete = (roomId: bigint) => {
-    console.log('Deleting room:', roomId.toString());
-    runInAction(() => {
-      this.rooms = this.rooms.filter(room => room.id !== roomId);
-      
-      // Also remove from favorites if present
-      const favoriteIndex = this.favoriteRooms.findIndex(room => room.id === roomId);
-      if (favoriteIndex >= 0) {
-        this.favoriteRooms.splice(favoriteIndex, 1);
+  handleRoomDelete = (roomId: string, success: boolean, message: string) => {
+    console.log(`Deleting room ${roomId}: ${success ? 'Success' : 'Failed'} - ${message}`);
+    
+    if (success) {
+      runInAction(() => {
+        this.rooms = this.rooms.filter(room => room.id !== roomId);
+        
+        // Also remove from favorites if present
+        this.favoriteRooms = this.favoriteRooms.filter(room => room.id !== roomId);
         this.saveFavoritesToStorage();
-      }
-      
-      // Clear selected room if it's the one being deleted
-      if (this.selectedRoom && this.selectedRoom.id === roomId) {
-        this.selectedRoom = null;
-      }
-      
-      this.applyFiltersAndSort();
-    });
+        
+        // Clear selected room if it's the one being deleted
+        if (this.selectedRoom && this.selectedRoom.id === roomId) {
+          this.selectedRoom = null;
+        }
+        
+        this.applyFiltersAndSort();
+      });
+    } else {
+      console.error('Failed to delete room:', message);
+    }
   }
 
   setSelectedRoom = (room: RoomWithSensors | null) => {
@@ -339,22 +197,13 @@ export class RoomStore {
   };
 
   addToFavorites = (room: RoomWithSensors) => {
-    // Create a deep copy of the room to avoid reference issues
-    const roomCopy = JSON.parse(JSON.stringify({
-      ...room,
-      id: room.id.toString() // Convert bigint to string for JSON
-    }));
-    
-    // Convert back to bigint
-    roomCopy.id = BigInt(roomCopy.id);
-    
     if (!this.favoriteRooms.find(r => r.id === room.id)) {
-      this.favoriteRooms.push(roomCopy);
+      this.favoriteRooms.push(room);
       this.saveFavoritesToStorage();
     }
   };
 
-  removeFromFavorites = (roomId: bigint) => {
+  removeFromFavorites = (roomId: string) => {
     this.favoriteRooms = this.favoriteRooms.filter(room => room.id !== roomId);
     this.saveFavoritesToStorage();
   };
@@ -368,112 +217,48 @@ export class RoomStore {
     this.saveFavoritesToStorage();
   };
 
-  addRoom = (room: Omit<Room, 'id' | 'created_at' | 'updated_at'>) => {
-    this.isLoading = true;
-    
-    // Use network API to add room
-    const result = networkAPI.sendMessage('add_room', room);
-    
-    if (!result) {
-      // If network API fails, create a mock room locally
-      const newRoom: RoomWithSensors = {
-        ...room,
-        id: BigInt(Date.now()),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        sensors: {
-          lights: {
-            bathroom: false,
-            bedroom: false,
-            hallway: false
-          },
-          temperature: 21,
-          humidity: 40,
-          pressure: 1013
-        },
-        doorLocked: true,
-        guests: [],
-        max_guests: room.max_guests || 2,
-        current_guests_count: 0
-      };
-      
-      this.handleNewRoom(newRoom);
+  updateRoom = (roomId: string, status: string) => {
+    console.log(`Updating room ${roomId} with status: ${status}`);
+    networkAPI.updateRoom(roomId, status);
+  }
+  
+  deleteRoom = (roomId: string) => {
+    console.log('Deleting room:', roomId);
+    networkAPI.deleteRoom(roomId);
+  }
+
+  toggleDoorLock = (roomId: string) => {
+    console.log('Toggling door lock for room:', roomId);
+    const room = this.rooms.find(r => r.id === roomId);
+    if (room) {
+      const newStatus = room.doorLocked ? 'unlocked' : 'locked';
+      this.updateRoom(roomId, newStatus);
     }
   }
   
-  updateRoom = (roomId: bigint, updates: Partial<Room>) => {
+  toggleLight = (roomId: string, light: 'bathroom' | 'bedroom' | 'hallway') => {
+    console.log(`Toggling ${light} light for room:`, roomId);
     const room = this.rooms.find(r => r.id === roomId);
-    if (!room) return;
-    
-    // Use network API to update room
-    networkAPI.sendMessage('update_room', { id: roomId, ...updates });
-    
-    // Optimistically update the local state
-    this.handleRoomUpdate({ ...room, ...updates });
-  }
-  
-  deleteRoom = (roomId: bigint) => {
-    // Use network API to delete room
-    networkAPI.sendMessage('delete_room', { id: roomId });
-    
-    // Optimistically update the local state
-    this.handleRoomDelete(roomId);
+    if (room && room.sensors) {
+      // This functionality would need to be updated to match the actual server API
+      // For now, we'll just update the local state
+      const newValue = !room.sensors.lights[light];
+      runInAction(() => {
+        room.sensors.lights[light] = newValue;
+      });
+    }
   }
 
-  toggleDoorLock = (roomId: bigint) => {
+  updateSensor = (roomId: string, type: 'temperature' | 'humidity' | 'pressure', value: number) => {
+    console.log(`Updating ${type} sensor for room ${roomId} to ${value}`);
     const room = this.rooms.find(r => r.id === roomId);
-    if (!room) return;
-    
-    this.updateRoom(roomId, {
-      doorLocked: !room.doorLocked
-    });
-  }
-  
-  toggleLight = (roomId: bigint, light: 'bathroom' | 'bedroom' | 'hallway') => {
-    const room = this.rooms.find(r => r.id === roomId);
-    if (!room || !room.sensors?.lights) return;
-    
-    const newLightState = !room.sensors.lights[light];
-    
-    const updatedSensors: RoomSensors = {
-      ...room.sensors,
-      lights: {
-        ...room.sensors.lights,
-        [light]: newLightState
-      }
-    };
-    
-    this.updateRoom(roomId, {
-      sensors: updatedSensors
-    } as Partial<Room>);
-  }
-
-  updateSensor = (roomId: bigint, type: 'temperature' | 'humidity' | 'pressure', value: number) => {
-    const room = this.rooms.find(r => r.id === roomId);
-    if (!room) return;
-    
-    // Ensure sensors object exists
-    const sensors = room.sensors || {
-      temperature: 0,
-      humidity: 0,
-      pressure: 0,
-      lights: {
-        bathroom: false,
-        bedroom: false,
-        hallway: false
-      }
-    };
-
-    // Create updated sensors object
-    const updatedSensors: RoomSensors = {
-      ...sensors,
-      [type]: value
-    };
-
-    // Update sensor with new value
-    this.updateRoom(roomId, {
-      sensors: updatedSensors
-    } as Partial<Room>);
+    if (room && room.sensors) {
+      // This functionality would need to be updated to match the actual server API
+      // For now, we'll just update the local state
+      runInAction(() => {
+        room.sensors[type] = value;
+      });
+    }
   }
 
   // Computed properties
@@ -524,14 +309,15 @@ export class RoomStore {
     return {
       standart: this.rooms.filter(room => room.room_type === 'standart').length,
       deluxe: this.rooms.filter(room => room.room_type === 'deluxe').length,
-      suit: this.rooms.filter(room => room.room_type === 'suit').length
+      suite: this.rooms.filter(room => room.room_type === 'suite').length
     };
   }
 
   get averageRoomTemperature() {
     if (this.rooms.length === 0) return 0;
     
-    const sum = this.rooms.reduce((acc, room) => acc + room.sensors.temperature, 0);
+    const sum = this.rooms.reduce((acc, room) => 
+      room.sensors ? acc + room.sensors.temperature : acc, 0);
     return parseFloat((sum / this.rooms.length).toFixed(1));
   }
 
@@ -577,7 +363,7 @@ export class RoomStore {
 
   saveEditedRoom = () => {
     if (this.selectedRoom) {
-      this.updateRoom(this.selectedRoom.id, this.editableRoom);
+      this.updateRoom(this.selectedRoom.id, this.editableRoom.status);
       this.stopEditing();
     }
   };
@@ -594,36 +380,36 @@ export class RoomStore {
     };
   };
 
-  // Data access with MobX
-  loadRoomById = (roomId: bigint, notFoundCallback?: () => void) => {
-    this.isLoading = true;
+  loadRoomById = (roomId: string, notFoundCallback?: () => void) => {
+    console.log('Loading room by ID:', roomId);
+    
     const room = this.rooms.find(r => r.id === roomId);
     
-    runInAction(() => {
-      if (room) {
-        this.setSelectedRoom(room);
-        this.initEditableRoom(room);
+    if (room) {
+      this.selectedRoom = room;
+      this.isLoading = false;
+      return;
+    }
+    
+    // Room not found locally, request it from the server
+    this.isLoading = true;
+    
+    // Create a timeout to handle the case where the room doesn't exist
+    const timeout = setTimeout(() => {
+      if (this.isLoading) {
         this.isLoading = false;
-      } else {
-        // If room not found, load data or fallback to mock
-        if (this.rooms.length === 0) {
-          this.loadMockData();
-          
-          // Check again after loading data
-          const roomAfterLoad = this.rooms.find(r => r.id === roomId);
-          if (roomAfterLoad) {
-            this.setSelectedRoom(roomAfterLoad);
-            this.initEditableRoom(roomAfterLoad);
-          } else if (notFoundCallback) {
-            notFoundCallback();
-          }
-        } else if (notFoundCallback) {
+        if (notFoundCallback) {
           notFoundCallback();
         }
-        
-        this.isLoading = false;
       }
-    });
+    }, 3000);
+    
+    // In this implementation, we don't have a direct API call to load a single room
+    // So we'll just request all rooms and then find the one we want
+    networkAPI.requestRooms();
+    
+    // Cancel the timeout if we get a response
+    clearTimeout(timeout);
   };
   
   resetRoomDetails = () => {
@@ -631,8 +417,8 @@ export class RoomStore {
     this.resetUI();
   };
   
-  isFavorite = (roomId: bigint): boolean => {
-    return this.favoriteRooms.some(r => r.id === roomId);
+  isFavorite = (roomId: string): boolean => {
+    return this.favoriteRooms.some(room => room.id === roomId);
   };
   
   toggleFavorite = (room: RoomWithSensors) => {
@@ -642,6 +428,21 @@ export class RoomStore {
       this.addToFavorites(room);
     }
   };
+
+  // New method to add a room
+  addRoom = (roomData: { room_number: string; room_type: RoomType; status: RoomStatus; price_per_night: number; max_guests?: number }) => {
+    console.log('Adding new room:', roomData);
+    this.isLoading = true;
+    
+    // Use NetworkAPI to add the room
+    networkAPI.addRoom(
+      roomData.room_number,
+      roomData.room_type,
+      roomData.status,
+      roomData.price_per_night,
+      roomData.max_guests
+    );
+  }
 }
 
 export default new RoomStore(); 

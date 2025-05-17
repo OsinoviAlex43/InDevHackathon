@@ -42,7 +42,7 @@ const ROOM_STATUSES: { value: RoomStatus; label: string }[] = [
 const ROOM_TYPES: { value: RoomType; label: string }[] = [
   { value: 'standart', label: 'Standard' },
   { value: 'deluxe', label: 'Deluxe' },
-  { value: 'suit', label: 'Suite' }
+  { value: 'suite', label: 'Suite' }
 ];
 
 const SORT_OPTIONS: { field: keyof Room; label: string }[] = [
@@ -218,6 +218,7 @@ const RoomsPage: React.FC = observer(() => {
   const handleCreateRoom = () => {
     if (!validateForm()) return;
     
+    // Используем обновленный метод addRoom из RoomStore
     roomStore.addRoom({
       room_number: newRoom.room_number,
       room_type: newRoom.room_type,
@@ -225,6 +226,7 @@ const RoomsPage: React.FC = observer(() => {
       price_per_night: Number(newRoom.price_per_night)
     });
     
+    // Закрываем диалог
     handleCloseCreateRoomDialog();
   };
   

@@ -40,8 +40,12 @@ public class WebSocketController {
             switch (action) {
                 case "get_rooms":
                     return getRooms();
+                case "add_room":
+                    return addRoom(data);
                 case "update_room":
                     return updateRoom(data);
+                case "delete_room":
+                    return deleteRoom(data);
                 case "get_guests":
                     return getGuests();
                 case "add_guest":
@@ -357,6 +361,93 @@ public class WebSocketController {
             return objectMapper.writeValueAsString(response);
         } catch (Exception e) {
             return createErrorResponse("Ошибка при назначении гостей: " + e.getMessage());
+        }
+    }
+    
+    // Добавление новой комнаты
+    private String addRoom(JsonNode data) {
+        try {
+            // Генерируем новый ID
+            String roomId = UUID.randomUUID().toString().replace("-", "").substring(0, 9);
+            
+            Map<String, Object> newRoom = new HashMap<>();
+            newRoom.put("id", roomId);
+            newRoom.put("room_number", data.get("room_number").asText());
+            newRoom.put("room_type", data.get("room_type").asText());
+            newRoom.put("status", data.get("status").asText());
+            newRoom.put("price_per_night", data.get("price_per_night").asDouble());
+            newRoom.put("created_at", getCurrentIsoDateTime());
+            newRoom.put("updated_at", getCurrentIsoDateTime());
+            newRoom.put("doorLocked", true);
+            newRoom.put("max_guests", data.has("max_guests") ? data.get("max_guests").asInt() : 2);
+            newRoom.put("current_guests_count", 0);
+            
+            // Добавляем пустой список гостей
+            newRoom.put("guests", new ArrayList<>());
+            
+            // Добавляем данные с датчиков
+            Map<String, Object> sensors = new HashMap<>();
+            sensors.put("temperature", 22.0);
+            sensors.put("humidity", 45);
+            sensors.put("pressure", 1013);
+            
+            Map<String, Boolean> lights = new HashMap<>();
+            lights.put("bathroom", false);
+            lights.put("bedroom", false);
+            lights.put("hallway", false);
+            
+            sensors.put("lights", lights);
+            newRoom.put("sensors", sensors);
+            
+            // Сохраняем комнату
+            rooms.put(roomId, newRoom);
+            
+            ObjectNode response = objectMapper.createObjectNode();
+            response.put("action", "add_room");
+            response.set("data", objectMapper.valueToTree(newRoom));
+            
+            return objectMapper.writeValueAsString(response);
+        } catch (Exception e) {
+            return createErrorResponse("Ошибка при добавлении комнаты: " + e.getMessage());
+        }
+    }
+    
+    // Удаление комнаты
+    private String deleteRoom(JsonNode data) {
+        try {
+            String roomId = data.get("id").asText();
+            
+            if (!rooms.containsKey(roomId)) {
+                return createErrorResponse("Комната с ID " + roomId + " не найдена");
+            }
+            
+            // Получаем информацию о комнате перед удалением
+            Map<String, Object> room = rooms.get(roomId);
+            
+            // Проверяем, нет ли в комнате гостей
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> roomGuests = (List<Map<String, Object>>) room.getOrDefault("guests", new ArrayList<>());
+            
+            if (!roomGuests.isEmpty()) {
+                return createErrorResponse("Нельзя удалить комнату, в которой проживают гости");
+            }
+            
+            // Удаляем комнату
+            rooms.remove(roomId);
+            
+            // Формируем ответ
+            ObjectNode response = objectMapper.createObjectNode();
+            response.put("action", "delete_room");
+            
+            ObjectNode responseData = objectMapper.createObjectNode();
+            responseData.put("success", true);
+            responseData.put("message", "Комната успешно удалена");
+            responseData.put("id", roomId);
+            
+            response.set("data", responseData);
+            return objectMapper.writeValueAsString(response);
+        } catch (Exception e) {
+            return createErrorResponse("Ошибка при удалении комнаты: " + e.getMessage());
         }
     }
     

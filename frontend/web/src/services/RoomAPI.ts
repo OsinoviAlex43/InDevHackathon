@@ -22,8 +22,6 @@ class RoomAPI {
     networkAPI.registerHandlers({
       onRoomData: handlers.onInitialData,
       onRoomUpdate: handlers.onRoomUpdate,
-      onRoomAdded: handlers.onRoomAdded,
-      onRoomDeleted: handlers.onRoomDeleted,
       onError: handlers.onError
     });
   }
@@ -36,7 +34,7 @@ class RoomAPI {
 
   // Request initial data
   requestInitialData() {
-    networkAPI.requestInitialData();
+    networkAPI.requestRooms();
   }
 
   // Send message through WebSocket
@@ -44,27 +42,10 @@ class RoomAPI {
     return networkAPI.sendMessage(action, data);
   }
 
-  // Add a room
-  addRoom(room: Omit<Room, 'id' | 'created_at' | 'updated_at'>): RoomWithSensors | null {
-    networkAPI.sendMessage('add_room', room);
-    return null; // Real operation is handled by NetworkAPI
-  }
-
   // Update a room
-  updateRoom(roomId: bigint, updates: Partial<Room>, currentRoom?: RoomWithSensors): RoomWithSensors | null {
-    networkAPI.sendMessage('update_room', { 
-      id: roomId, 
-      ...updates 
-    });
+  updateRoom(roomId: string, status: string): RoomWithSensors | null {
+    networkAPI.updateRoom(roomId, status);
     return null; // Real operation is handled by NetworkAPI
-  }
-
-  // Delete a room
-  deleteRoom(roomId: bigint): boolean {
-    networkAPI.sendMessage('delete_room', { 
-      id: roomId 
-    });
-    return true; // Assume success, real operation is handled by NetworkAPI
   }
 
   // Check if connected

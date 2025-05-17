@@ -1,4 +1,4 @@
-export type RoomType = 'standart' | 'deluxe' | 'suit';
+export type RoomType = 'standart' | 'deluxe' | 'suite';
 export type RoomStatus = 'free' | 'occupied' | 'service' | 'cleaning' | 'booked';
 
 export interface RoomSensors {
@@ -13,18 +13,17 @@ export interface RoomSensors {
 }
 
 export interface Guest {
-    id: bigint;
+    id: string;
     first_name: string;
     last_name: string;
-    email: string;
+    email?: string;
     phone?: string;
     check_in_date?: string;
     check_out_date?: string;
-    photo_url?: string;
 }
 
 export interface Room {
-    id: bigint;
+    id: string;
     room_number: string;
     room_type: RoomType;
     status: RoomStatus;
@@ -60,15 +59,15 @@ export interface RoomSortOptions {
 }
 
 export interface GuestAssignment {
-    guest_id: bigint;
-    room_id: bigint;
+    guest_id: string;
+    room_id: string;
     check_in_date: string;
     is_primary_guest: boolean;
 }
 
 export interface RemoveGuestFromRoom {
-    guest_id: bigint;
-    room_id: bigint;
+    guest_id: string;
+    room_id: string;
 }
 
 export interface AssignMultipleGuestsRequest {

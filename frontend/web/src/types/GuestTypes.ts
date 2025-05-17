@@ -1,10 +1,10 @@
 export interface Guest {
-    id: bigint;
+    id: string;
     first_name: string;
     last_name: string;
     email: string;
     phone: string;
-    room_id?: bigint;
+    room_id?: string;
     check_in_date?: string;
     check_out_date?: string;
     created_at: string;
@@ -42,7 +42,7 @@ export interface CreateGuestData {
     last_name: string;
     email: string;
     phone: string;
-    room_id?: bigint;
+    room_id?: string;
     check_in_date?: string;
     check_out_date?: string;
     photo_url?: string;

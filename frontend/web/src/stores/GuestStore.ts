@@ -2,68 +2,6 @@ import { makeAutoObservable, runInAction } from 'mobx';
 import type {Guest, GuestFilters, GuestSortOptions} from '../types/GuestTypes';
 import networkAPI from '../services/NetworkAPI';
 
-// Mock data for demonstration and fallback
-const mockGuests: Guest[] = [
-  {
-    id: BigInt(101),
-    first_name: 'John',
-    last_name: 'Doe',
-    email: 'john.doe@example.com',
-    phone: '+1234567890',
-    room_id: BigInt(1),
-    check_in_date: '2023-06-01T14:00:00Z',
-    check_out_date: '2023-06-05T12:00:00Z',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: BigInt(102),
-    first_name: 'Jane',
-    last_name: 'Smith',
-    email: 'jane.smith@example.com',
-    phone: '+1987654321',
-    room_id: BigInt(3),
-    check_in_date: '2023-06-02T15:00:00Z',
-    check_out_date: '2023-06-08T11:00:00Z',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: BigInt(103),
-    first_name: 'Robert',
-    last_name: 'Johnson',
-    email: 'robert.j@example.com',
-    phone: '+1122334455',
-    check_in_date: '2023-06-10T16:00:00Z',
-    check_out_date: '2023-06-15T10:00:00Z',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: BigInt(104),
-    first_name: 'Emily',
-    last_name: 'Davis',
-    email: 'emily.davis@example.com',
-    phone: '+1567890123',
-    room_id: BigInt(2),
-    check_in_date: '2023-06-05T13:00:00Z',
-    check_out_date: '2023-06-12T10:00:00Z',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: BigInt(105),
-    first_name: 'Michael',
-    last_name: 'Wilson',
-    email: 'michael.w@example.com',
-    phone: '+1678901234',
-    check_in_date: '2023-06-15T12:00:00Z',
-    check_out_date: '2023-06-20T10:00:00Z',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  }
-];
-
 export class GuestStore {
   guests: Guest[] = [];
   filteredGuests: Guest[] = [];
@@ -76,14 +14,6 @@ export class GuestStore {
     makeAutoObservable(this);
     // Initialize API connection
     this.initializeAPI();
-    
-    // Set fallback data if API fails
-    setTimeout(() => {
-      if (this.guests.length === 0) {
-        console.log('Falling back to mock guest data');
-        this.loadMockData();
-      }
-    }, 5000);
   }
 
   // Initialize API and register handlers
@@ -94,30 +24,15 @@ export class GuestStore {
       onGuestUpdate: this.handleGuestUpdate, 
       onGuestAdded: this.handleNewGuest,
       onGuestDeleted: this.handleGuestDelete,
-      onError: this.loadMockData
-    });
-  }
-
-  loadMockData = () => {
-    console.log('Loading mock guest data');
-    runInAction(() => {
-      this.guests = mockGuests;
-      this.applyFiltersAndSort();
-      this.isLoading = false;
+      onError: (message) => {
+        console.error('API Error:', message);
+      }
     });
   }
 
   requestInitialData() {
     this.isLoading = true;
-    networkAPI.sendMessage('get_guests', {});
-    
-    // Fallback in case the server doesn't respond
-    setTimeout(() => {
-      if (this.isLoading && this.guests.length === 0) {
-        console.log('No response from guest server, loading mock data');
-        this.loadMockData();
-      }
-    }, 3000);
+    networkAPI.requestGuests();
   }
   
   handleInitialData = (guestsData: Guest[]) => {
@@ -155,70 +70,23 @@ export class GuestStore {
     });
   }
 
-  handleGuestDelete = (guestId: bigint) => {
-    console.log('Deleting guest:', guestId.toString());
-    runInAction(() => {
-      this.guests = this.guests.filter(guest => guest.id !== guestId);
-      
-      // Clear selected guest if it's the one being deleted
-      if (this.selectedGuest && this.selectedGuest.id === guestId) {
-        this.selectedGuest = null;
-      }
-      
-      this.applyFiltersAndSort();
-    });
-  }
-
-  // Use local operations when unable to connect to server
-  mockAddGuest(data: any) {
-    console.log('Using mock add guest:', data);
-    const newGuest: Guest = {
-      ...data,
-      id: BigInt(Date.now()),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
+  handleGuestDelete = (guestId: string, success: boolean, message: string) => {
+    console.log(`Deleting guest ${guestId}: ${success ? 'Success' : 'Failed'} - ${message}`);
     
-    // Convert room_id to BigInt if provided
-    if (newGuest.room_id) {
-      newGuest.room_id = BigInt(newGuest.room_id.toString());
+    if (success) {
+      runInAction(() => {
+        this.guests = this.guests.filter(guest => guest.id !== guestId);
+        
+        // Clear selected guest if it's the one being deleted
+        if (this.selectedGuest && this.selectedGuest.id === guestId) {
+          this.selectedGuest = null;
+        }
+        
+        this.applyFiltersAndSort();
+      });
+    } else {
+      console.error('Failed to delete guest:', message);
     }
-    
-    this.handleNewGuest(newGuest);
-  }
-
-  mockUpdateGuest(data: any) {
-    console.log('Using mock update guest:', data);
-    
-    if (!data.id) return;
-    
-    const guestId = BigInt(data.id);
-    const existingGuest = this.guests.find(g => g.id === guestId);
-    
-    if (!existingGuest) return;
-    
-    // Process room_id as BigInt if present
-    if (data.room_id) {
-      data.room_id = BigInt(data.room_id);
-    }
-    
-    const updatedGuest: Guest = {
-      ...existingGuest,
-      ...data as Partial<Guest>,
-      id: guestId,
-      updated_at: new Date().toISOString()
-    };
-    
-    this.handleGuestUpdate(updatedGuest);
-  }
-
-  mockDeleteGuest(data: any) {
-    console.log('Using mock delete guest:', data);
-    
-    if (!data.id) return;
-    
-    const guestId = BigInt(data.id);
-    this.handleGuestDelete(guestId);
   }
 
   // Store actions
@@ -322,58 +190,40 @@ export class GuestStore {
     this.filteredGuests = filtered;
   };
 
-  addGuest = (guest: Omit<Guest, 'id' | 'created_at' | 'updated_at'>) => {
-    this.isLoading = true;
+  addGuest = (firstName: string, lastName: string, email: string, phone: string) => {
+    console.log('Adding new guest:', {firstName, lastName, email, phone});
     
-    // Try to send via network API
-    const result = networkAPI.sendMessage('add_guest', guest);
+    // Use the network API to add the guest
+    networkAPI.addGuest(firstName, lastName, email, phone);
+  }
+
+  updateGuest = (guestId: string, updates: Partial<Guest>) => {
+    console.log('Updating guest:', {guestId, updates});
     
-    // If network API fails, use local mock operation
-    if (!result) {
-      this.mockAddGuest(guest);
-    }
-  };
+    // Use the network API to update the guest
+    networkAPI.updateGuest(guestId, updates);
+  }
 
-  updateGuest = (guestId: bigint, updates: Partial<Guest>) => {
-    // Send update through network API
-    const result = networkAPI.sendMessage('update_guest', { 
-      id: guestId, 
-      ...updates 
-    });
+  deleteGuest = (guestId: string) => {
+    console.log('Deleting guest:', guestId);
     
-    // If network API fails, use local mock operation
-    if (!result) {
-      this.mockUpdateGuest({ id: guestId, ...updates });
-    }
-  };
+    // Use the network API to delete the guest
+    networkAPI.deleteGuest(guestId);
+  }
 
-  deleteGuest = (guestId: bigint) => {
-    // Send delete request through network API
-    const result = networkAPI.sendMessage('delete_guest', { 
-      id: guestId
-    });
+  checkInGuest = (guestId: string, roomId: string, checkInDate?: string) => {
+    console.log('Checking in guest:', {guestId, roomId, checkInDate});
     
-    // If network API fails, use local mock operation
-    if (!result) {
-      this.mockDeleteGuest({ id: guestId });
-    }
-  };
+    // Use the network API to check in the guest
+    networkAPI.checkInGuest(guestId, roomId, checkInDate);
+  }
 
-  checkInGuest = (guestId: bigint, roomId: bigint) => {
-    // Send check-in request through network API
-    this.updateGuest(guestId, {
-      room_id: roomId,
-      check_in_date: new Date().toISOString()
-    });
-  };
-
-  checkOutGuest = (guestId: bigint) => {
-    // Send check-out request through network API
-    this.updateGuest(guestId, {
-      room_id: undefined,
-      check_out_date: new Date().toISOString()
-    });
-  };
+  checkOutGuest = (guestId: string, checkOutDate?: string) => {
+    console.log('Checking out guest:', {guestId, checkOutDate});
+    
+    // Use the network API to check out the guest
+    networkAPI.checkOutGuest(guestId, checkOutDate);
+  }
 
   // Statistics methods for dashboard
   get totalGuests() {

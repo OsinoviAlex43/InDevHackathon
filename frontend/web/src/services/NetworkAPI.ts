@@ -1,17 +1,18 @@
 import type { Room, RoomWithSensors } from '../types/RoomTypes';
 import type { Guest } from '../types/GuestTypes';
+// @ts-ignore - Игнорируем ошибку типа для SockJS
 import SockJS from 'sockjs-client';
 
 type MessageHandlers = {
   onRoomData?: (rooms: RoomWithSensors[]) => void;
   onRoomUpdate?: (room: RoomWithSensors) => void;
   onRoomAdded?: (room: RoomWithSensors) => void;
-  onRoomDeleted?: (roomId: bigint) => void;
+  onRoomDeleted?: (roomId: string, success: boolean, message: string) => void;
   onGuestData?: (guests: Guest[]) => void;
   onGuestUpdate?: (guest: Guest) => void;
   onGuestAdded?: (guest: Guest) => void;
-  onGuestDeleted?: (guestId: bigint) => void;
-  onError?: () => void;
+  onGuestDeleted?: (guestId: string, success: boolean, message: string) => void;
+  onError?: (message: string) => void;
 };
 
 class NetworkAPI {
@@ -48,8 +49,8 @@ class NetworkAPI {
     try {
       console.log('Attempting to connect to SockJS...');
       
-      // Create SockJS connection
-      const sockjs = new SockJS('http://192.168.65.55:8080/ws');
+      // Create SockJS connection - IP-адрес сервера
+      const sockjs = new SockJS('http://192.168.65.110:8080/ws');
       
       // SockJS implements the WebSocket interface
       this.socket = sockjs;
@@ -63,10 +64,11 @@ class NetworkAPI {
         this.flushPendingMessages();
         
         // Request initial data immediately after connection
-        this.requestInitialData();
+        this.requestRooms();
+        this.requestGuests();
       };
       
-      sockjs.onmessage = (event) => {
+      sockjs.onmessage = (event: MessageEvent) => {
         try {
           console.log('SockJS message received:', event.data);
           const message = JSON.parse(event.data);
@@ -74,47 +76,55 @@ class NetworkAPI {
           switch (message.action) {
             case 'initial_data':
               if (message.data?.rooms && Array.isArray(message.data.rooms) && this.messageHandlers.onRoomData) {
-                const rooms = message.data.rooms.map(this.convertBigInts);
-                this.messageHandlers.onRoomData(rooms);
+                this.messageHandlers.onRoomData(message.data.rooms);
               }
               if (message.data?.guests && Array.isArray(message.data.guests) && this.messageHandlers.onGuestData) {
-                const guests = message.data.guests.map(this.convertBigInts);
-                this.messageHandlers.onGuestData(guests);
-              }
-              break;
-            case 'update_room':
-              if (message.data && this.messageHandlers.onRoomUpdate) {
-                const updatedRoom = this.convertBigInts(message.data);
-                this.messageHandlers.onRoomUpdate(updatedRoom);
+                this.messageHandlers.onGuestData(message.data.guests);
               }
               break;
             case 'add_room':
               if (message.data && this.messageHandlers.onRoomAdded) {
-                const newRoom = this.convertBigInts(message.data);
-                this.messageHandlers.onRoomAdded(newRoom);
+                this.messageHandlers.onRoomAdded(message.data);
+              }
+              break;
+            case 'update_room':
+              if (message.data && this.messageHandlers.onRoomUpdate) {
+                this.messageHandlers.onRoomUpdate(message.data);
               }
               break;
             case 'delete_room':
-              if (message.data?.id && this.messageHandlers.onRoomDeleted) {
-                this.messageHandlers.onRoomDeleted(BigInt(message.data.id));
+              if (message.data && this.messageHandlers.onRoomDeleted) {
+                this.messageHandlers.onRoomDeleted(
+                  message.data.id,
+                  message.data.success,
+                  message.data.message
+                );
               }
               break;
             case 'update_guest':
               if (message.data && this.messageHandlers.onGuestUpdate) {
-                const updatedGuest = this.convertBigInts(message.data);
-                this.messageHandlers.onGuestUpdate(updatedGuest);
+                this.messageHandlers.onGuestUpdate(message.data);
               }
               break;
             case 'add_guest':
               if (message.data && this.messageHandlers.onGuestAdded) {
-                const newGuest = this.convertBigInts(message.data);
-                this.messageHandlers.onGuestAdded(newGuest);
+                this.messageHandlers.onGuestAdded(message.data);
               }
               break;
             case 'delete_guest':
-              if (message.data?.id && this.messageHandlers.onGuestDeleted) {
-                this.messageHandlers.onGuestDeleted(BigInt(message.data.id));
+              if (message.data && this.messageHandlers.onGuestDeleted) {
+                this.messageHandlers.onGuestDeleted(
+                  message.data.id,
+                  message.data.success,
+                  message.data.message
+                );
               }
+              break;
+            case 'error':
+              if (message.data && this.messageHandlers.onError) {
+                this.messageHandlers.onError(message.data.message);
+              }
+              console.error('Server error:', message.data.message);
               break;
             default:
               console.log('Unhandled message type:', message.action);
@@ -125,7 +135,7 @@ class NetworkAPI {
       };
       
       sockjs.onerror = () => {
-        console.info('SockJS error');
+        console.error('SockJS connection error');
         this.handleDisconnect();
       };
       
@@ -134,8 +144,7 @@ class NetworkAPI {
         this.handleDisconnect();
       };
     } catch (error) {
-      console.info('Failed to create SockJS connection');
-      console.error(error);
+      console.error('Failed to create SockJS connection', error);
       this.handleDisconnect();
     }
   }
@@ -154,30 +163,11 @@ class NetworkAPI {
         this.connect();
       }, delay);
     } else {
-      console.log('Max connection attempts reached, giving up');
+      console.error('Max connection attempts reached, cannot connect to server');
       if (this.messageHandlers.onError) {
-        this.messageHandlers.onError();
+        this.messageHandlers.onError('Не удалось подключиться к серверу после нескольких попыток');
       }
     }
-  }
-  
-  // Helper to convert string IDs to BigInts
-  private convertBigInts<T extends { id?: string | bigint }>(obj: T): T {
-    if (!obj) return obj;
-    
-    const result = { ...obj };
-    
-    // Convert id to BigInt if it's a string
-    if (typeof result.id === 'string') {
-      result.id = BigInt(result.id);
-    }
-    
-    // Convert room_id to BigInt if present and a string
-    if ('room_id' in result && typeof result.room_id === 'string') {
-      (result as any).room_id = BigInt(result.room_id);
-    }
-    
-    return result;
   }
 
   // Send any pending messages
@@ -193,18 +183,100 @@ class NetworkAPI {
     }
   }
 
-  // Request initial data
-  requestInitialData() {
-    this.sendMessage('get_data', {});
+  // API методы
+  
+  // Request rooms
+  requestRooms() {
+    this.sendMessage('get_rooms', {});
+  }
+  
+  // Request guests
+  requestGuests() {
+    this.sendMessage('get_guests', {});
+  }
+  
+  // Add a new room
+  addRoom(roomNumber: string, roomType: string, status: string, pricePerNight: number, maxGuests?: number) {
+    this.sendMessage('add_room', {
+      room_number: roomNumber,
+      room_type: roomType,
+      status: status,
+      price_per_night: pricePerNight,
+      max_guests: maxGuests
+    });
+  }
+  
+  // Update room status
+  updateRoom(roomId: string, status: string) {
+    this.sendMessage('update_room', {
+      id: roomId,
+      status: status
+    });
+  }
+  
+  // Delete a room
+  deleteRoom(roomId: string) {
+    this.sendMessage('delete_room', {
+      id: roomId
+    });
+  }
+  
+  // Add a new guest
+  addGuest(firstName: string, lastName: string, email: string, phone: string) {
+    this.sendMessage('add_guest', {
+      first_name: firstName,
+      last_name: lastName,
+      email: email,
+      phone: phone
+    });
+  }
+  
+  // Update guest data
+  updateGuest(guestId: string, updates: Partial<Guest>) {
+    this.sendMessage('update_guest', {
+      id: guestId,
+      ...updates
+    });
+  }
+  
+  // Check in guest to room
+  checkInGuest(guestId: string, roomId: string, checkInDate?: string) {
+    this.sendMessage('update_guest', {
+      id: guestId,
+      room_id: roomId,
+      check_in_date: checkInDate
+    });
+  }
+  
+  // Check out guest from room
+  checkOutGuest(guestId: string, checkOutDate?: string) {
+    this.sendMessage('update_guest', {
+      id: guestId,
+      room_id: null,
+      check_out_date: checkOutDate
+    });
+  }
+  
+  // Delete a guest
+  deleteGuest(guestId: string) {
+    this.sendMessage('delete_guest', {
+      id: guestId
+    });
+  }
+  
+  // Assign multiple guests to a room
+  assignMultipleGuests(roomId: string, guestIds: string[], checkInDate?: string) {
+    this.sendMessage('assign_multiple_guests', {
+      room_id: roomId,
+      guest_ids: guestIds,
+      check_in_date: checkInDate
+    });
   }
 
   // Send message through SockJS
   sendMessage(action: string, data: any): boolean {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      // Convert BigInt to string before sending
-      const preparedData = this.serializeData(data);
-      
-      const message = JSON.stringify({ action, data: preparedData });
+      const message = JSON.stringify({ action, data });
       console.log('Sending SockJS message:', message);
       this.socket.send(message);
       return true;
@@ -218,29 +290,6 @@ class NetworkAPI {
       }
       return false;
     }
-  }
-  
-  // Helper to convert BigInts to strings for JSON
-  private serializeData(data: any): any {
-    if (data === null || data === undefined) return data;
-    
-    if (typeof data === 'bigint') {
-      return data.toString();
-    }
-    
-    if (typeof data === 'object') {
-      if (Array.isArray(data)) {
-        return data.map((item) => this.serializeData(item));
-      }
-      
-      const result: Record<string, any> = {};
-      for (const key in data) {
-        result[key] = this.serializeData(data[key]);
-      }
-      return result;
-    }
-    
-    return data;
   }
 
   // Check if connected
