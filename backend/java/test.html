@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Test SockJS + STOMP - Расширенный</title>
+  <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h2 { margin-top: 30px; }
+    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .controls div { border: 1px solid #ccc; padding: 10px; border-radius: 5px; }
+    .output { background: #f9f9f9; padding: 10px; border-radius: 5px; white-space: pre-wrap; }
+    label { display: block; margin: 5px 0 2px; }
+    input, select, button { width: 100%; padding: 5px; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Тест SockJS + STOMP - Расширенный</h1>
+  <button id="connect">Подключиться</button>
+  <div id="status">Не подключено</div>
+
+  <h2>Запросы</h2>
+  <div class="controls">
+    <div>
+      <h3>Список комнат</h3>
+      <button id="rooms">/app/admin/rooms</button>
+      <div id="out-rooms" class="output"></div>
+    </div>
+    <div>
+      <h3>Список гостей</h3>
+      <button id="guests">/app/admin/guests</button>
+      <div id="out-guests" class="output"></div>
+    </div>
+    <div>
+      <h3>Статистика отеля</h3>
+      <button id="stats">/app/admin/stats</button>
+      <div id="out-stats" class="output"></div>
+    </div>
+    <div>
+      <h3>Фильтр по статусу</h3>
+      <label for="status-input">Status:</label>
+      <select id="status-input">
+        <option value="VACANT">VACANT</option>
+        <option value="OCCUPIED">OCCUPIED</option>
+        <option value="CLEANING">CLEANING</option>
+      </select>
+      <button id="filter-status">/app/admin/rooms/by-status</button>
+      <div id="out-filter-status" class="output"></div>
+    </div>
+    <div>
+      <h3>Обновить статус комнаты</h3>
+      <label for="upd-room-id">Room ID:</label><input type="number" id="upd-room-id" value="1">
+      <label for="upd-status">New Status:</label>
+      <select id="upd-status">
+        <option value="VACANT">VACANT</option>
+        <option value="OCCUPIED">OCCUPIED</option>
+        <option value="CLEANING">CLEANING</option>
+      </select>
+      <button id="update-status">/app/admin/room/update-status</button>
+      <div id="out-update-status" class="output"></div>
+    </div>
+    <div>
+      <h3>Обновить цену комнаты</h3>
+      <label for="upd-price-id">Room ID:</label><input type="number" id="upd-price-id" value="1">
+      <label for="upd-price">New Price:</label><input type="number" id="upd-price" value="100.00" step="0.01">
+      <button id="update-price">/app/admin/room/update-price</button>
+      <div id="out-update-price" class="output"></div>
+    </div>
+    <div>
+      <h3>Заселение гостя</h3>
+      <label>First Name:</label><input id="in-first" type="text" value="Иван">
+      <label>Last Name:</label><input id="in-last" type="text" value="Петров">
+      <label>Email:</label><input id="in-email" type="email" value="ivan@example.com">
+      <label>Phone:</label><input id="in-phone" type="text" value="+70000000000">
+      <label>Room Number:</label><input id="in-room" type="text" value="101">
+      <button id="check-in">/app/admin/guest/check-in</button>
+      <div id="out-check-in" class="output"></div>
+    </div>
+    <div>
+      <h3>Выселение гостя</h3>
+      <label for="out-guest-id">Guest ID:</label><input type="number" id="out-guest-id" value="1">
+      <button id="check-out">/app/admin/guest/check-out</button>
+      <div id="out-check-out" class="output"></div>
+    </div>
+    <div>
+      <h3>Продление проживания</h3>
+      <label for="ext-guest-id">Guest ID:</label><input type="number" id="ext-guest-id" value="1">
+      <label for="ext-date">New CheckOut Date:</label><input type="date" id="ext-date">
+      <label><input type="checkbox" id="ext-approved" checked> Approved</label>
+      <button id="extend-stay">/app/admin/approve-extend-stay</button>
+      <div id="out-extend-stay" class="output"></div>
+    </div>
+    <div>
+      <h3>Поиск гостей</h3>
+      <label for="search-term">Search Term:</label><input type="text" id="search-term" value="Иван">
+      <label for="search-field">Field:</label>
+      <select id="search-field">
+        <option value="lastName">lastName</option>
+        <option value="firstName">firstName</option>
+        <option value="email">email</option>
+      </select>
+      <button id="search-guests">/app/admin/guests/search</button>
+      <div id="out-search-guests" class="output"></div>
+    </div>
+  </div>
+
+  <script>
+    let client;
+    function logTo(selector, obj) {
+      document.querySelector(selector).textContent = JSON.stringify(obj, null, 2);
+    }
+
+    document.getElementById('connect').onclick = () => {
+      const socket = new SockJS('http://localhost:8080/ws');
+      client = Stomp.over(socket);
+      client.debug = msg => console.log(msg);
+      client.connect({}, frame => {
+        document.getElementById('status').textContent = '✓ CONNECTED';
+        // подписки на личные очереди
+        client.subscribe('/user/queue/rooms-by-status', msg => logTo('#out-filter-status', JSON.parse(msg.body)));
+        client.subscribe('/user/queue/admin/room-update-result', msg => logTo('#out-update-status', JSON.parse(msg.body)));
+        client.subscribe('/user/queue/admin/room-update-result', msg => logTo('#out-update-price', JSON.parse(msg.body)));
+        client.subscribe('/user/queue/admin/check-in-result', msg => logTo('#out-check-in', JSON.parse(msg.body)));
+        client.subscribe('/user/queue/admin/check-out-result', msg => logTo('#out-check-out', JSON.parse(msg.body)));
+        client.subscribe('/user/queue/admin/extend-stay-result', msg => logTo('#out-extend-stay', JSON.parse(msg.body)));
+        client.subscribe('/user/queue/admin/guest-search-results', msg => logTo('#out-search-guests', JSON.parse(msg.body)));
+        // подписки на топики
+        client.subscribe('/topic/admin/rooms', msg => logTo('#out-rooms', JSON.parse(msg.body)));
+        client.subscribe('/topic/admin/guests', msg => logTo('#out-guests', JSON.parse(msg.body)));
+        client.subscribe('/topic/admin/stats', msg => logTo('#out-stats', JSON.parse(msg.body)));
+      }, err => document.getElementById('status').textContent = '✗ ERROR: ' + err);
+    };
+
+    // Запрос кнопками
+    document.getElementById('rooms').onclick = () => client.send('/app/admin/rooms', {}, '{}');
+    document.getElementById('guests').onclick = () => client.send('/app/admin/guests', {}, '{}');
+    document.getElementById('stats').onclick = () => client.send('/app/admin/stats', {}, '{}');
+    document.getElementById('filter-status').onclick = () => {
+      client.send('/app/admin/rooms/by-status', {}, JSON.stringify({ status: document.getElementById('status-input').value }));
+    };
+    document.getElementById('update-status').onclick = () => {
+      client.send('/app/admin/room/update-status', {}, JSON.stringify({ roomId: +document.getElementById('upd-room-id').value, status: document.getElementById('upd-status').value }));
+    };
+    document.getElementById('update-price').onclick = () => {
+      client.send('/app/admin/room/update-price', {}, JSON.stringify({ roomId: +document.getElementById('upd-price-id').value, price: +document.getElementById('upd-price').value }));
+    };
+    document.getElementById('check-in').onclick = () => {
+      const payload = {
+        firstName: document.getElementById('in-first').value,
+        lastName: document.getElementById('in-last').value,
+        email: document.getElementById('in-email').value,
+        phone: document.getElementById('in-phone').value,
+        roomNumber: document.getElementById('in-room').value
+      };
+      client.send('/app/admin/guest/check-in', {}, JSON.stringify(payload));
+    };
+    document.getElementById('check-out').onclick = () => {
+      client.send('/app/admin/guest/check-out', {}, JSON.stringify({ guestId: +document.getElementById('out-guest-id').value }));
+    };
+    document.getElementById('extend-stay').onclick = () => {
+      client.send('/app/admin/approve-extend-stay', {}, JSON.stringify({
+        guestId: +document.getElementById('ext-guest-id').value,
+        newCheckOutDate: document.getElementById('ext-date').value,
+        approved: document.getElementById('ext-approved').checked
+      }));
+    };
+    document.getElementById('search-guests').onclick = () => {
+      client.send('/app/admin/guests/search', {}, JSON.stringify({
+        searchTerm: document.getElementById('search-term').value,
+        searchField: document.getElementById('search-field').value
+      }));
+    };
+  </script>
+</body>
+</html>

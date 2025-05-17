@@ -68,7 +68,8 @@ public class AdminWebSocketController {
      * Получение списка комнат по статусу
      */
     @MessageMapping("/admin/rooms/by-status")
-    public void getRoomsByStatus(@Payload Map<String, Object> payload) {
+    @SendTo("/topic/admin/rooms-by-status")
+    public List<Room> getRoomsByStatus(@Payload Map<String, Object> payload) {
         try {
             String status = (String) payload.get("status");
             String requesterId = payload.getOrDefault("requesterId", "0").toString();
@@ -77,15 +78,13 @@ public class AdminWebSocketController {
             
             List<Room> filteredRooms = roomService.getRoomsByStatus(status);
             
-            messagingTemplate.convertAndSendToUser(
-                    requesterId,
-                    "/queue/rooms-by-status",
-                    filteredRooms
-            );
+            return filteredRooms;
         } catch (Exception e) {
             log.error("Ошибка при получении комнат по статусу", e);
             handleError(payload, "Ошибка при получении комнат по статусу: " + e.getMessage());
         }
+
+        return null;
     }
 
     /**
